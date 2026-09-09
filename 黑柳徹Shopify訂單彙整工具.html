@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>黑柳徹Shopify訂單彙整工具</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- SheetJS (xlsx) CDN for Excel parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Google Fonts: Noto Sans TC & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .jp-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+      border-radius: 0.75rem;
+    }
+
+    /* Media Print Optimization Rules */
+    @media print {
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        font-size: 10pt;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .print-only {
+        display: block !important;
+      }
+
+      .print-container {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+
+      /* Standard Full Print Mode */
+      body:not(.printing-a5) .a5-print-container {
+        display: none !important;
+      }
+
+      /* A5 Dedicated Print Mode */
+      body.printing-a5 .print-container,
+      body.printing-a5 header,
+      body.printing-a5 footer,
+      body.printing-a5 #toast-container,
+      body.printing-a5 #mapping-modal,
+      body.printing-a5 main {
+        display: none !important;
+      }
+
+      body.printing-a5 .a5-print-container {
+        display: block !important;
+        width: 297mm !important;
+        height: 210mm !important;
+        max-width: 297mm !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+        font-family: 'Noto Sans TC', sans-serif !important;
+        background: #fff !important;
+        overflow: hidden !important;
+      }
+
+      .print-card {
+        border: 1px solid #333333 !important;
+        border-radius: 2px !important;
+        margin-bottom: 10px !important;
+        padding: 8px 12px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        background-color: #ffffff !important;
+      }
+
+      .print-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .print-table th, 
+      .print-table td {
+        border: 1px solid #000000 !important;
+        padding: 5px 8px !important;
+        color: #000000 !important;
+      }
+
+      .print-table th {
+        background-color: #f1f5f9 !important;
+        font-weight: 700;
+      }
+
+      @page {
+        size: A4 portrait;
+        margin: 8mm;
+      }
+    }
+
+    @media screen {
+      .print-only,
+      .a5-print-container {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col text-slate-800 bg-slate-50">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
+
+  <!-- Manual Mapping Modal (Fallback when CORS or offline) -->
+  <div id="mapping-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <svg class="w-5 h-5 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+          </svg>
+          對應表設定 (手動備援模式)
+        </h3>
+        <button onclick="closeMappingModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-relaxed">
+        如自動連線 Google 試算表失敗，您可以透過上傳檔案進行手動設定：
+      </p>
+
+      <div class="space-y-4">
+        <!-- Option A: Upload Mapping File -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+          <span class="text-xs font-bold text-slate-800 block">選項 A：上傳對應表檔 (.xlsx / .csv)</span>
+          <p class="text-[11px] text-slate-500">上傳含有「型號」與「細目」欄位的 Excel / CSV 對應表檔。</p>
+          <input type="file" id="mapping-file-input" accept=".xlsx, .xls, .csv" onchange="handleMappingFileUpload(event)" class="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-800 hover:file:bg-slate-300 cursor-pointer">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Navigation Header -->
+  <header class="no-print bg-slate-900 text-white shadow-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-center font-bold text-white text-lg shadow-inner">
+          單
+        </div>
+        <div>
+          <h1 class="font-bold text-base tracking-wide text-slate-100">黑柳徹Shopify訂單彙整工具</h1>
+          <p class="text-[11px] text-slate-400">自動跨檔比對品項細目 ➔ 生成極速核對與列印報告</p>
+        </div>
+      </div>
+
+      <!-- Google Sheet Connection Status Badge -->
+      <div class="flex items-center gap-3">
+        <button onclick="openMappingModal()" id="status-badge" class="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-800 text-xs px-3 py-1.5 rounded-full border border-slate-700 transition-colors">
+          <span id="status-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="status-text" class="text-slate-300 font-medium">連線 Google 試算表中...</span>
+        </button>
+
+        <button onclick="fetchGoogleSheetMapping()" title="重新同步對應表" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+        </button>
+
+        <button onclick="openMappingModal()" title="設定對應表" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- Upload & Quick Action Section -->
+    <section class="no-print grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Drag & Drop File Upload Box -->
+      <div class="lg:col-span-2 jp-card p-6 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <svg class="w-4 h-4 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+              </svg>
+              上傳 Excel / Shopify CSV 訂單檔案 (.xlsx / .xls / .csv)
+            </h2>
+            <span class="text-xs text-slate-400 font-mono">預設讀取單號與 U 列型號</span>
+          </div>
+
+          <label class="border-2 border-dashed border-slate-300 hover:border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50/50 hover:bg-slate-100/50">
+            <input type="file" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleFileUpload(event)">
+            <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center mb-3">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+            </div>
+            <p id="upload-label" class="text-xs font-semibold text-slate-700 text-center mb-1">
+              拖曳 Excel / CSV 檔案至此，或點擊選擇檔案
+            </p>
+            <p class="text-[11px] text-slate-400 text-center">支援由 Shopify / 蝦皮匯出之 orders_export 試算表及 CSV 檔</p>
+          </label>
+        </div>
+
+        <div id="file-info-bar" class="hidden mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs text-emerald-800">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span id="file-name-text" class="font-bold">orders.xlsx</span>
+          </div>
+          <span id="file-stats-text" class="font-mono text-[11px] text-emerald-600">已載入</span>
+        </div>
+      </div>
+
+      <!-- Quick Action Panel: A5 Print & Hsinchu Logistics Export -->
+      <div class="jp-card p-6 flex flex-col justify-between bg-white border border-slate-200 rounded-xl shadow-sm">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 000-4h-6a2 2 0 000 4zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+            </svg>
+            出貨功能模組
+          </h2>
+          <p class="text-xs text-slate-500 leading-relaxed mb-4">
+            解析訂單後，可快速產生 A5 尺寸品項對裁清單或匯出新竹物流託運格式檔。
+          </p>
+
+          <!-- Checkbox: Exclude TK Accessories -->
+          <div class="mb-4 flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+            <input type="checkbox" id="exclude-tk-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer" checked>
+            <label for="exclude-tk-checkbox" class="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+              列印時排除配件 (型號開頭為 TK)
+            </label>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <button onclick="printA5Summary()" class="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-bold text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 border border-slate-800">
+            <svg class="w-4 h-4 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 000-4h-6a2 2 0 000 4zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+            </svg>
+            列印出貨彙整 (A5)
+          </button>
+
+          <button onclick="exportHsinchuLogisticsExcel()" class="w-full py-3 px-4 bg-emerald-800 hover:bg-emerald-900 active:bg-emerald-950 text-white font-bold text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 border border-emerald-900">
+            <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            匯出新竹物流 Excel 檔
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Empty State Prompt -->
+    <div id="empty-state" class="jp-card p-12 text-center my-8 bg-white border border-slate-200 rounded-xl shadow-sm">
+      <div class="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+      </div>
+      <h3 class="text-base font-semibold text-slate-700 mb-1">尚未載入訂單資料</h3>
+      <p class="text-xs text-slate-400 max-w-md mx-auto">請先在上方上傳 Excel / CSV 訂單檔案，系統將會自動對應 Google Sheet 資料並生成分析報告。</p>
+    </div>
+
+    <!-- REPORT CONTENT (Rendered dynamically) -->
+    <div id="report-content" class="hidden space-y-8">
+
+      <!-- Action Bar & Summary Bar -->
+      <div class="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center space-x-6 text-xs text-slate-600">
+          <div>
+            <span class="text-slate-400 block text-[10px]">解析總訂單數</span>
+            <strong id="stat-total-orders" class="text-sm font-bold text-slate-900 font-mono">0 筆</strong>
+          </div>
+          <div class="border-l border-slate-200 pl-6">
+            <span class="text-slate-400 block text-[10px]">商品列總數</span>
+            <strong id="stat-total-rows" class="text-sm font-bold text-slate-900 font-mono">0 列</strong>
+          </div>
+          <div class="border-l border-slate-200 pl-6">
+            <span class="text-slate-400 block text-[10px]">統計不重複細目</span>
+            <strong id="stat-unique-details" class="text-sm font-bold text-slate-900 font-mono">0 款</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Report Print Header (Visible during full A4 print) -->
+      <div class="print-only mb-6 border-b-2 border-black pb-4">
+        <h1 class="text-2xl font-bold text-black tracking-tight">訂單彙整與出貨明細報告</h1>
+        <div class="flex justify-between items-center text-xs text-black mt-2">
+          <span id="report-timestamp">產生時間：-</span>
+          <span>資料對應來源：Google Sheet (GID: 1182638674)</span>
+        </div>
+      </div>
+
+      <!-- LOGIC A SECTION -->
+      <section class="space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+          <h3 class="text-base font-bold text-slate-900 print:text-black flex items-center gap-2">
+            <span class="bg-slate-900 text-white text-xs px-2 py-0.5 rounded print:bg-black">邏輯 A</span>
+            <span>品項細目總量統計 (型號 ➔ 細目對應)</span>
+          </h3>
+          <span class="text-xs text-slate-500 print:text-black font-mono">依 Google 試算表列順序排列</span>
+        </div>
+
+        <!-- Logic A Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs print-table">
+            <thead>
+              <tr class="bg-slate-100 text-slate-800 font-semibold border-y border-slate-200">
+                <th class="py-2.5 px-3 w-12 text-center">#</th>
+                <th class="py-2.5 px-3">對應細目名稱 (Google Sheet G列)</th>
+                <th class="py-2.5 px-3 text-center w-28">總累計數量</th>
+                <th class="py-2.5 px-3">包含原始型號 (Excel U列)</th>
+              </tr>
+            </thead>
+            <tbody id="logic-a-tbody" class="divide-y divide-slate-200 text-slate-800">
+              <!-- Dynamic Rows -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- LOGIC B SECTION -->
+      <section class="space-y-4 pt-6">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+          <h3 class="text-base font-bold text-slate-900 print:text-black flex items-center gap-2">
+            <span class="bg-slate-800 text-white text-xs px-2 py-0.5 rounded print:bg-black">邏輯 B</span>
+            <span>收件地址去重與單號彙整卡片</span>
+          </h3>
+          <span class="text-xs text-slate-500 print:text-black font-mono">同一訂單編號併入單卡</span>
+        </div>
+
+        <!-- Logic B Grid Cards Container -->
+        <div id="logic-b-cards" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Dynamic Order Cards -->
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- A5 Print View Container (Hidden in web, visible during A5 print) -->
+  <div id="a5-print-view" class="a5-print-container">
+    <!-- Rendered dynamically by JS -->
+  </div>
+
+  <footer class="no-print bg-slate-100 border-t border-slate-200 py-4 mt-12 text-center text-xs text-slate-500">
+    <p>訂單彙整與細目核對系統 &copy; 2026 | 單一檔案高效極速架構</p>
+  </footer>
+
+  <script>
+    /* Global error boundary to suppress non-critical cross-origin script error noise */
+    window.onerror = function(msg) {
+      if (typeof msg === 'string' && msg.includes('Script error')) {
+        console.warn('Suppressed cross-origin script notice:', msg);
+        return true;
+      }
+      return false;
+    };
+
+    /* ==========================================================================
+       GLOBAL STATE & CONFIGURATION
+       ========================================================================== */
+    const GOOGLE_SHEET_ID = '1VOjSO8HnomJkcLU1w-qVNo3Adu42_QfOtDffvqsTviI';
+    const GOOGLE_SHEET_GID = '1182638674';
+
+    // Map: Normalized Model Name -> Detail Name (細目)
+    let modelToDetailMap = new Map();
+    // Map: Detail Name -> Original Google Sheet Row Index (Sequence Order)
+    let detailOrderMap = new Map();
+
+    let isMappingLoaded = false;
+    let rawExcelRows = [];
+    let lastProcessedDetailSummaryMap = new Map();
+    let lastProcessedOrdersMap = new Map();
+
+    window.onload = function() {
+      fetchGoogleSheetMapping();
+      setupDragAndDrop();
+    };
+
+    /* ==========================================================================
+       TOAST NOTIFICATIONS & MODAL CONTROLS
+       ========================================================================== */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      const bgColors = {
+        success: 'bg-emerald-800 text-white border-emerald-900',
+        error: 'bg-rose-800 text-white border-rose-900',
+        info: 'bg-slate-800 text-white border-slate-900',
+        warning: 'bg-amber-800 text-white border-amber-900'
+      };
+
+      toast.className = `p-3 rounded-lg shadow-lg border text-xs font-medium transition-all transform translate-y-2 opacity-0 pointer-events-auto flex items-center justify-between ${bgColors[type] || bgColors.info}`;
+      toast.innerHTML = `
+        <span>${escapeHtml(message)}</span>
+        <button onclick="this.parentElement.remove()" class="ml-3 font-bold hover:opacity-75">&times;</button>
+      `;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      }, 10);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function openMappingModal() {
+      document.getElementById('mapping-modal').classList.remove('hidden');
+    }
+
+    function closeMappingModal() {
+      document.getElementById('mapping-modal').classList.add('hidden');
+    }
+
+    function handleMappingFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+          if (!rows || rows.length < 2) {
+            showToast('上傳的對應表檔案無內容', 'error');
+            return;
+          }
+
+          processMappingRows(rows);
+          closeMappingModal();
+          showToast(`已手動上傳並更新對應表 (${modelToDetailMap.size} 筆)`, 'success');
+
+          if (rawExcelRows.length > 0) {
+            processExcelRows(rawExcelRows);
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('無法解析上傳的對應表檔案', 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    /* ==========================================================================
+       GOOGLE SHEET MAPPING FETCH (SAFE FETCH + LOCALSTORAGE CACHE FALLBACK)
+       ========================================================================== */
+    async function fetchGoogleSheetMapping() {
+      updateSyncUI('loading', '同步對應表中...');
+
+      const directUrl1 = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GOOGLE_SHEET_GID}`;
+      const directUrl2 = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv&gid=${GOOGLE_SHEET_GID}`;
+      const proxyUrl1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl1)}`;
+
+      const fetchTargets = [
+        { url: directUrl1, name: 'GVIZ CSV' },
+        { url: directUrl2, name: 'Export CSV' },
+        { url: proxyUrl1, name: 'CORS Proxy' }
+      ];
+
+      let csvText = null;
+
+      for (const target of fetchTargets) {
+        try {
+          const res = await fetch(target.url);
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt && txt.length > 30 && !txt.startsWith('<!DOCTYPE html>')) {
+              csvText = txt;
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn(`Fetch mapping via ${target.name} failed silently:`, e);
+        }
+      }
+
+      if (csvText) {
+        try {
+          localStorage.setItem('cached_mapping_csv', csvText);
+        } catch (e) { }
+
+        parseGoogleSheetCSV(csvText);
+        isMappingLoaded = true;
+        updateSyncUI('success', `對應表就緒 (${modelToDetailMap.size} 型號)`);
+        showToast(`Google 試算表同步成功！已載入 ${modelToDetailMap.size} 筆對應`, 'success');
+
+        if (rawExcelRows.length > 0) {
+          processExcelRows(rawExcelRows);
+        }
+        return;
+      }
+
+      // Check cached mapping in localStorage
+      const cachedCsv = localStorage.getItem('cached_mapping_csv');
+      if (cachedCsv) {
+        try {
+          parseGoogleSheetCSV(cachedCsv);
+          isMappingLoaded = true;
+          updateSyncUI('warning', `離線快取對應 (${modelToDetailMap.size} 型號)`);
+          showToast(`已自動從本地快取載入對應表 (${modelToDetailMap.size} 筆)`, 'info');
+
+          if (rawExcelRows.length > 0) {
+            processExcelRows(rawExcelRows);
+          }
+          return;
+        } catch (e) { }
+      }
+
+      isMappingLoaded = false;
+      updateSyncUI('error', '同步失敗 (點此手動設定)');
+      showToast('無法讀取 Google 試算表，請點擊右上角設定按鈕手動設定對應表', 'warning');
+    }
+
+    function updateSyncUI(state, text) {
+      const dot = document.getElementById('status-dot');
+      const textElem = document.getElementById('status-text');
+      if (!dot || !textElem) return;
+
+      textElem.textContent = text;
+      dot.className = 'w-2 h-2 rounded-full ';
+
+      if (state === 'loading') {
+        dot.className += 'bg-amber-400 animate-pulse';
+      } else if (state === 'success') {
+        dot.className += 'bg-emerald-400';
+      } else if (state === 'warning') {
+        dot.className += 'bg-amber-400';
+      } else {
+        dot.className += 'bg-rose-500';
+      }
+    }
+
+    /* ==========================================================================
+       CSV & DATA CLEANING UTILITIES
+       ========================================================================== */
+    function parseCSV(text) {
+      if (!text) return [];
+      const p = [[]];
+      let row = p[0];
+      let inQuotes = false;
+      let token = '';
+
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        const nextC = text[i + 1];
+
+        if (c === '"') {
+          if (inQuotes && nextC === '"') {
+            token += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (c === ',' && !inQuotes) {
+          row.push(token);
+          token = '';
+        } else if ((c === '\r' || c === '\n') && !inQuotes) {
+          if (c === '\r' && nextC === '\n') {
+            i++;
+          }
+          row.push(token);
+          token = '';
+          row = [];
+          p.push(row);
+        } else {
+          token += c;
+        }
+      }
+      if (token || row.length > 0) {
+        row.push(token);
+      }
+      return p.filter(r => r.length > 0 && r.some(cell => String(cell).trim() !== ''));
+    }
+
+    function normalizeKey(str) {
+      if (!str) return '';
+      return String(str)
+        .normalize('NFKC')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+    }
+
+    function parseGoogleSheetCSV(csvText) {
+      const rows = parseCSV(csvText);
+      processMappingRows(rows);
+    }
+
+    function processMappingRows(rows) {
+      modelToDetailMap.clear();
+      detailOrderMap.clear();
+
+      if (!rows || rows.length < 1) return;
+
+      let modelColIdx = 4;  // Column E default
+      let detailColIdx = 6; // Column G default
+
+      for (let i = 0; i < Math.min(10, rows.length); i++) {
+        const r = rows[i];
+        if (!r) continue;
+        r.forEach((cell, idx) => {
+          const val = cleanStr(cell);
+          if (val === '型號') modelColIdx = idx;
+          if (val === '細目') detailColIdx = idx;
+        });
+      }
+
+      let orderSequence = 0;
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const modelVal = cleanStr(row[modelColIdx]);
+        const detailVal = cleanStr(row[detailColIdx]);
+
+        if (modelVal && detailVal && modelVal !== '型號') {
+          const normKey = normalizeKey(modelVal);
+          modelToDetailMap.set(normKey, detailVal);
+
+          if (!detailOrderMap.has(detailVal)) {
+            detailOrderMap.set(detailVal, orderSequence++);
+          }
+        }
+      }
+    }
+
+    /* ==========================================================================
+       DRAG AND DROP & FILE UPLOAD HANDLERS
+       ========================================================================== */
+    function setupDragAndDrop() {
+      const dropzone = document.querySelector('.border-dashed');
+      if (!dropzone) return;
+
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, e => {
+          e.preventDefault();
+          e.stopPropagation();
+        }, false);
+      });
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, () => dropzone.classList.add('border-slate-800', 'bg-slate-100/50'), false);
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, () => dropzone.classList.remove('border-slate-800', 'bg-slate-100/50'), false);
+      });
+
+      dropzone.addEventListener('drop', e => {
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+          handleFile(files[0]);
+        }
+      });
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        handleFile(file);
+      }
+    }
+
+    function handleFile(file) {
+      if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
+        showToast('檔案格式不正確！請上傳 .xlsx, .xls 或 .csv 格式之檔案', 'error');
+        return;
+      }
+
+      document.getElementById('upload-label').textContent = `已選擇：${file.name}`;
+      document.getElementById('file-name-text').textContent = file.name;
+      document.getElementById('file-stats-text').textContent = `${(file.size / 1024).toFixed(1)} KB`;
+      document.getElementById('file-info-bar').classList.remove('hidden');
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array', codepage: 65001 });
+
+          let targetSheetName = workbook.SheetNames.find(s => s.toLowerCase() === 'orders_export') || workbook.SheetNames[0];
+          const sheet = workbook.Sheets[targetSheetName];
+
+          rawExcelRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+          if (!rawExcelRows || rawExcelRows.length <= 1) {
+            showToast('訂單檔案內無有效的資料', 'warning');
+            return;
+          }
+
+          processExcelRows(rawExcelRows);
+          showToast('訂單檔案解析成功！', 'success');
+
+        } catch (err) {
+          console.error('Error parsing Excel/CSV:', err);
+          showToast('解析訂單檔案發生錯誤，請確定檔案內容正確', 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    /* ==========================================================================
+       DYNAMIC COLUMN INDEX DETECTOR
+       ========================================================================== */
+    function findColumnIndices(headerRow) {
+      const colIdx = {
+        orderId: 0,     // Default Col A
+        model: 20,      // Default Col U
+        qty: -1,        // Dynamic search
+        name: 34,       // Default Col AI
+        detailAddr: 35, // Default Col AJ
+        district: 39,   // Default Col AN
+        zip: 40,        // Default Col AO
+        phone: 43       // Default Col AR
+      };
+
+      if (!headerRow || !Array.isArray(headerRow)) return colIdx;
+
+      headerRow.forEach((cell, idx) => {
+        const val = String(cell || '').trim();
+        const valUpper = val.toUpperCase();
+
+        if (
+          val.includes('數量') || 
+          val.includes('件數') || 
+          val.includes('購買數量') || 
+          val.includes('商品數量') || 
+          val.includes('單品數量') ||
+          valUpper === 'QTY' || 
+          valUpper === 'QUANTITY'
+        ) {
+          if (!/金額|單價|小計|總價|價格|價錢|金額|費用/i.test(val)) {
+            colIdx.qty = idx;
+          }
+        }
+
+        if (val.includes('訂單編號') || val.includes('訂單號') || valUpper === 'ORDER ID' || valUpper === 'ORDER NO' || val === 'Name') {
+          colIdx.orderId = idx;
+        }
+
+        if (val === '型號' || val.includes('商品型號') || val.includes('主型號') || valUpper === 'SKU' || val.includes('款式型號')) {
+          colIdx.model = idx;
+        }
+
+        if (val.includes('收件人') || val.includes('收件姓名') || val.includes('買家姓名') || val === '收件人姓名') {
+          colIdx.name = idx;
+        }
+
+        if (val.includes('詳細地址') || val.includes('收件地址') || val.includes('街道地址')) {
+          colIdx.detailAddr = idx;
+        }
+
+        if (val.includes('行政區') || val.includes('鄉鎮市區') || val.includes('縣市')) {
+          colIdx.district = idx;
+        }
+
+        if (val.includes('郵遞區號') || valUpper.includes('ZIP') || valUpper.includes('POSTAL')) {
+          colIdx.zip = idx;
+        }
+
+        if (val.includes('電話') || val.includes('手機') || val.includes('聯絡電話')) {
+          colIdx.phone = idx;
+        }
+      });
+
+      return colIdx;
+    }
+
+    /* ==========================================================================
+       DATA PROCESSING & AGGREGATION
+       ========================================================================== */
+    function processExcelRows(rows) {
+      if (!rows || rows.length < 2) return;
+
+      const detailSummaryMap = new Map();
+      const ordersMap = new Map();
+
+      const headerRow = rows[0] || [];
+      const colIdx = findColumnIndices(headerRow);
+
+      let totalItemRowsCount = 0;
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const orderId = cleanStr(row[colIdx.orderId]);
+        if (!orderId || orderId.toLowerCase() === 'name' || orderId.includes('訂單編號')) continue;
+
+        totalItemRowsCount++;
+
+        const rawModel = cleanStr(row[colIdx.model]);
+        const normModel = normalizeKey(rawModel);
+
+        const recipientName = cleanStr(row[colIdx.name]);
+        const zip = cleanStr(row[colIdx.zip]);
+        const district = cleanStr(row[colIdx.district]);
+        const addressDetail = cleanStr(row[colIdx.detailAddr]);
+        const phone = cleanStr(row[colIdx.phone]);
+
+        let qty = 1;
+
+        if (colIdx.qty !== -1 && row[colIdx.qty] !== undefined && row[colIdx.qty] !== '') {
+          const parsedQty = parseInt(row[colIdx.qty], 10);
+          if (!isNaN(parsedQty) && parsedQty > 0) {
+            qty = parsedQty;
+          }
+        } else {
+          for (let c = 0; c < row.length; c++) {
+            if (c === colIdx.orderId || c === colIdx.model || c === colIdx.name || c === colIdx.detailAddr) continue;
+
+            const headerName = String(headerRow[c] || '').trim();
+            const isPriceOrAmount = /金額|單價|小計|總價|價格|價錢|price|amount|subtotal|total|fee|運費|編號|id|zip|郵遞|電話|phone/i.test(headerName);
+
+            if (!isPriceOrAmount && row[c] !== undefined && row[c] !== '') {
+              const val = parseInt(row[c], 10);
+              if (!isNaN(val) && val > 0 && val < 200) {
+                if (headerName.includes('數') || headerName.toLowerCase().includes('qty')) {
+                  qty = val;
+                  colIdx.qty = c;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        let detailName = '';
+        let isMapped = false;
+
+        if (normModel && modelToDetailMap.has(normModel)) {
+          detailName = modelToDetailMap.get(normModel);
+          isMapped = true;
+        } else {
+          detailName = rawModel ? `${rawModel} (未對應細目)` : '無型號品項';
+          isMapped = false;
+        }
+
+        // Aggregate Logic A
+        if (!detailSummaryMap.has(detailName)) {
+          detailSummaryMap.set(detailName, {
+            totalQty: 0,
+            originalModels: new Set(),
+            orderIds: new Set(),
+            isMapped: isMapped
+          });
+        }
+        const summaryEntry = detailSummaryMap.get(detailName);
+        summaryEntry.totalQty += qty;
+        if (rawModel) summaryEntry.originalModels.add(rawModel);
+        if (orderId) summaryEntry.orderIds.add(orderId);
+
+        // Aggregate Logic B
+        if (!ordersMap.has(orderId)) {
+          const fullAddress = assembleAddress(zip, district, addressDetail);
+          ordersMap.set(orderId, {
+            orderId: orderId,
+            name: recipientName || '-',
+            phone: phone || '-',
+            address: fullAddress || '-',
+            items: []
+          });
+        }
+
+        const currentOrder = ordersMap.get(orderId);
+        currentOrder.items.push({
+          model: rawModel || '無型號',
+          detailName: detailName,
+          qty: qty
+        });
+      }
+
+      lastProcessedDetailSummaryMap = detailSummaryMap;
+      lastProcessedOrdersMap = ordersMap;
+      renderReport(ordersMap, detailSummaryMap, totalItemRowsCount);
+    }
+
+    function cleanStr(val) {
+      if (val === null || val === undefined) return '';
+      return String(val).trim();
+    }
+
+    function assembleAddress(zip, district, detail) {
+      const parts = [zip, district, detail].filter(p => Boolean(p && p.trim()));
+      return parts.join(' ');
+    }
+
+    /* ==========================================================================
+       UI REPORT RENDERING FUNCTIONS
+       ========================================================================== */
+    function renderReport(ordersMap, detailSummaryMap, totalItemRows) {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('report-content').classList.remove('hidden');
+
+      const now = new Date();
+      document.getElementById('report-timestamp').textContent = `產生時間：${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      document.getElementById('stat-total-orders').textContent = `${ordersMap.size} 筆`;
+      document.getElementById('stat-total-rows').textContent = `${totalItemRows} 列`;
+      document.getElementById('stat-unique-details').textContent = `${detailSummaryMap.size} 款`;
+
+      // Render Logic A Table
+      const tbody = document.getElementById('logic-a-tbody');
+      tbody.innerHTML = '';
+
+      const sortedSummaries = Array.from(detailSummaryMap.entries()).sort(([detailA], [detailB]) => {
+        const orderA = detailOrderMap.has(detailA) ? detailOrderMap.get(detailA) : 999999;
+        const orderB = detailOrderMap.has(detailB) ? detailOrderMap.get(detailB) : 999999;
+
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        return detailA.localeCompare(detailB, 'zh-TW');
+      });
+
+      let idx = 1;
+      sortedSummaries.forEach(([detailName, data]) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition-colors';
+        const modelsStr = Array.from(data.originalModels).map(m => escapeHtml(m)).join(', ');
+        const orderIdsStr = Array.from(data.orderIds || []).map(o => escapeHtml(o)).join(', ');
+
+        const isNoModel = detailName === '無型號品項';
+        const textColorClass = isNoModel 
+          ? 'text-red-600 font-bold' 
+          : (data.isMapped ? 'text-slate-900' : 'text-amber-700');
+
+        let detailDisplay = escapeHtml(detailName);
+        if (isNoModel && data.orderIds && data.orderIds.size > 0) {
+          detailDisplay += ` <span class="text-xs font-normal text-red-500 font-mono">(訂單: ${orderIdsStr})</span>`;
+        }
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 text-center text-slate-400 font-mono">${idx++}</td>
+          <td class="py-2.5 px-3 font-semibold ${textColorClass}">${detailDisplay}</td>
+          <td class="py-2.5 px-3 text-center font-bold text-slate-900 text-sm">${data.totalQty}</td>
+          <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px]">${modelsStr || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Render Logic B Cards
+      const cardsContainer = document.getElementById('logic-b-cards');
+      cardsContainer.innerHTML = '';
+
+      let cardNum = 1;
+      ordersMap.forEach((order) => {
+        const card = document.createElement('div');
+        
+        const hasNoModelItem = order.items.some(item => 
+          item.detailName === '無型號品項' || item.detailName.includes('無型號品項')
+        );
+
+        if (hasNoModelItem) {
+          // 紅底白字醒目卡片樣式
+          card.className = 'jp-card print-card p-4 bg-rose-600 text-white border-rose-700 relative overflow-hidden shadow-lg';
+
+          const itemsHtml = order.items.map(item => `
+            <li class="flex items-center justify-between text-xs py-1 border-b border-rose-400/40 last:border-0 print:border-black/20">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-white print:text-black">${escapeHtml(item.detailName)}</span>
+                <span class="text-[10px] text-rose-200 print:text-black font-mono">(${escapeHtml(item.model)})</span>
+              </div>
+              <span class="font-bold text-white print:text-black font-mono">x ${item.qty}</span>
+            </li>
+          `).join('');
+
+          card.innerHTML = `
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-rose-400/50 pb-3 mb-3 print:border-black">
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 bg-rose-900/80 border border-rose-300/50 text-white font-mono text-xs font-bold rounded print:bg-white print:border-black print:text-black flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                  </svg>
+                  #${cardNum++} [含無型號品項]
+                </span>
+                <div>
+                  <span class="text-[10px] text-rose-100 print:text-black uppercase tracking-wider block">訂單編號 (A列)</span>
+                  <span class="text-sm font-bold text-white print:text-black font-mono">${escapeHtml(order.orderId)}</span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-6 text-xs">
+                <div>
+                  <span class="text-[10px] text-rose-100 print:text-black block">收件姓名 (AI列)</span>
+                  <span class="font-semibold text-white print:text-black">${escapeHtml(order.name)}</span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-rose-100 print:text-black block">收件電話 (AR列)</span>
+                  <span class="font-mono text-white print:text-black">${escapeHtml(order.phone)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3 bg-rose-700/80 p-2.5 rounded border border-rose-500/60 print:bg-white print:border-black">
+              <span class="text-[10px] text-rose-200 print:text-black block mb-0.5">收件地址 (AO + AN + AJ)</span>
+              <p class="text-xs font-medium text-white print:text-black select-all">${escapeHtml(order.address)}</p>
+            </div>
+
+            <div>
+              <span class="text-[10px] text-rose-100 print:text-black block mb-1">內含商品與細目對應 (${order.items.length} 列)</span>
+              <ul class="bg-rose-700/50 rounded p-2 border border-rose-500/50 space-y-0.5 print:border-black">
+                ${itemsHtml}
+              </ul>
+            </div>
+          `;
+        } else {
+          // 標準白底卡片樣式
+          card.className = 'jp-card print-card p-4 bg-white relative overflow-hidden';
+
+          const itemsHtml = order.items.map(item => `
+            <li class="flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-0 print:border-black/20">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-900 print:text-black">${escapeHtml(item.detailName)}</span>
+                <span class="text-[10px] text-slate-400 print:text-black font-mono">(${escapeHtml(item.model)})</span>
+              </div>
+              <span class="font-bold text-slate-900 print:text-black font-mono">x ${item.qty}</span>
+            </li>
+          `).join('');
+
+          card.innerHTML = `
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3 print:border-black">
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 bg-slate-100 border border-slate-300 text-slate-800 font-mono text-xs font-bold rounded print:bg-white print:border-black print:text-black">
+                  #${cardNum++}
+                </span>
+                <div>
+                  <span class="text-[10px] text-slate-400 print:text-black uppercase tracking-wider block">訂單編號 (A列)</span>
+                  <span class="text-sm font-bold text-slate-900 print:text-black font-mono">${escapeHtml(order.orderId)}</span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-6 text-xs">
+                <div>
+                  <span class="text-[10px] text-slate-400 print:text-black block">收件姓名 (AI列)</span>
+                  <span class="font-semibold text-slate-900 print:text-black">${escapeHtml(order.name)}</span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 print:text-black block">收件電話 (AR列)</span>
+                  <span class="font-mono text-slate-900 print:text-black">${escapeHtml(order.phone)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3 bg-slate-50 p-2.5 rounded border border-slate-200 print:bg-white print:border-black">
+              <span class="text-[10px] text-slate-400 print:text-black block mb-0.5">收件地址 (AO + AN + AJ)</span>
+              <p class="text-xs font-medium text-slate-900 print:text-black select-all">${escapeHtml(order.address)}</p>
+            </div>
+
+            <div>
+              <span class="text-[10px] text-slate-400 print:text-black block mb-1">內含商品與細目對應 (${order.items.length} 列)</span>
+              <ul class="bg-white rounded p-2 border border-slate-100 space-y-0.5 print:border-black">
+                ${itemsHtml}
+              </ul>
+            </div>
+          `;
+        }
+
+        cardsContainer.appendChild(card);
+      });
+    }
+
+    /* ==========================================================================
+       A5 PRINT VIEW HANDLER
+       ========================================================================== */
+    function printA5Summary() {
+      if (!rawExcelRows || rawExcelRows.length === 0 || lastProcessedDetailSummaryMap.size === 0) {
+        showToast('請先上傳並解析 Excel 訂單檔案！', 'error');
+        return;
+      }
+
+      renderA5PrintView();
+
+      let styleTag = document.getElementById('a5-print-style-override');
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = 'a5-print-style-override';
+        document.head.appendChild(styleTag);
+      }
+      styleTag.innerHTML = `@page { size: A4 landscape; margin: 0; }`;
+
+      document.body.classList.add('printing-a5');
+      window.print();
+
+      setTimeout(() => {
+        document.body.classList.remove('printing-a5');
+        if (styleTag) styleTag.remove();
+      }, 1000);
+    }
+
+    function renderA5PrintView() {
+      const container = document.getElementById('a5-print-view');
+      if (!container) return;
+
+      const excludeTk = document.getElementById('exclude-tk-checkbox')?.checked || false;
+
+      const now = new Date();
+      const timeStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      let sortedSummaries = Array.from(lastProcessedDetailSummaryMap.entries()).sort(([detailA], [detailB]) => {
+        const orderA = detailOrderMap.has(detailA) ? detailOrderMap.get(detailA) : 999999;
+        const orderB = detailOrderMap.has(detailB) ? detailOrderMap.get(detailB) : 999999;
+
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        return detailA.localeCompare(detailB, 'zh-TW');
+      });
+
+      if (excludeTk) {
+        sortedSummaries = sortedSummaries.filter(([detailName, data]) => {
+          const models = Array.from(data.originalModels || []);
+          if (models.length === 0) {
+            return !normalizeKey(detailName).startsWith('TK');
+          }
+          return !models.some(m => normalizeKey(m).startsWith('TK'));
+        });
+      }
+
+      let totalItemsQty = 0;
+      let rowsHtml = '';
+      let idx = 1;
+
+      sortedSummaries.forEach(([detailName, data]) => {
+        totalItemsQty += data.totalQty;
+        const isNoModel = detailName === '無型號品項';
+        const orderIdsStr = Array.from(data.orderIds || []).map(o => escapeHtml(o)).join(', ');
+
+        let detailDisplay = escapeHtml(detailName);
+        if (isNoModel && data.orderIds && data.orderIds.size > 0) {
+          detailDisplay += ` <span style="font-weight: normal; font-size: 9px; color: #dc2626;">(訂單: ${orderIdsStr})</span>`;
+        }
+
+        const fontStyle = isNoModel ? 'color: #dc2626; font-weight: bold;' : 'font-weight: bold;';
+
+        rowsHtml += `
+          <tr style="border-bottom: 1px solid #000;">
+            <td style="padding: 3px 5px; text-align: center; border-right: 1px solid #000; font-family: monospace;">${idx++}</td>
+            <td style="padding: 3px 5px; ${fontStyle} border-right: 1px solid #000; font-size: 10.5px;">${detailDisplay}</td>
+            <td style="padding: 3px 5px; text-align: center; font-weight: bold; font-size: 12px; font-family: monospace;">${data.totalQty}</td>
+          </tr>
+        `;
+      });
+
+      container.innerHTML = `
+        <div style="display: flex; width: 297mm; height: 210mm; position: relative; box-sizing: border-box; background: #fff; font-family: 'Noto Sans TC', sans-serif;">
+          
+          <!-- Left Half: A5 Order Summary (148.5mm x 210mm) -->
+          <div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box; display: flex; flex-direction: column;">
+            <div style="border: 2px solid #000; padding: 10px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column;">
+              
+              <!-- Header -->
+              <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 6px;">
+                <div>
+                  <h2 style="font-size: 15px; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
+                    品項細目出貨彙整表 (A5) ${excludeTk ? '<span style="font-size: 10px; font-weight: normal; color: #444; margin-left: 4px;">[已排除配件 TK]</span>' : ''}
+                  </h2>
+                  <span style="font-size: 9px; color: #333;">列印時間：${timeStr}</span>
+                </div>
+                <div style="text-align: right; font-size: 10px; line-height: 1.2;">
+                  <div>款式種類: <strong style="font-size: 11px;">${sortedSummaries.length}</strong> 款</div>
+                  <div>商品總件數: <strong style="font-size: 11px;">${totalItemsQty}</strong> 件</div>
+                </div>
+              </div>
+
+              <!-- Table -->
+              <div style="flex-grow: 1; overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #000;">
+                  <thead>
+                    <tr style="background-color: #e2e8f0; border-bottom: 1px solid #000;">
+                      <th style="padding: 3px 5px; width: 26px; text-align: center; border-right: 1px solid #000;">#</th>
+                      <th style="padding: 3px 5px; text-align: left; border-right: 1px solid #000;">對應細目名稱 (Google Sheet G列)</th>
+                      <th style="padding: 3px 5px; width: 55px; text-align: center;">總數量</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rowsHtml}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Center Vertical Cut Line -->
+          <div style="position: absolute; left: 148.5mm; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #666; pointer-events: none; z-index: 20;"></div>
+
+          <!-- Right Half: Empty space for clean cutting -->
+          <div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box;"></div>
+        </div>
+      `;
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    /* ==========================================================================
+       HSINCHU LOGISTICS EXCEL EXPORT
+       ========================================================================== */
+    function exportHsinchuLogisticsExcel() {
+      if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) {
+        showToast('請先上傳並解析 Excel 訂單檔案！', 'error');
+        return;
+      }
+
+      const exportData = [
+        [
+          "序號(無用途)",
+          "訂單號",
+          "收件人姓名(必填)",
+          "收件人地址(必填)",
+          "收件人電話(必填)",
+          "託運備註",
+          "(商品別編號)",
+          "商品數量(必填)",
+          "才積/重量/總長",
+          "代收貨款",
+          "指定配送日期YYYYMMDD",
+          "指定配送時間"
+        ]
+      ];
+
+      let seq = 1;
+      lastProcessedOrdersMap.forEach((order) => {
+        exportData.push([
+          '',
+          order.orderId || '',
+          order.name || '',
+          order.address || '',
+          order.phone || '',
+          '',
+          '',
+          1,
+          2,
+          '',
+          '',
+          ''
+        ]);
+        seq++;
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+      worksheet['!cols'] = [
+        { wch: 14 },
+        { wch: 20 },
+        { wch: 18 },
+        { wch: 48 },
+        { wch: 18 },
+        { wch: 42 },
+        { wch: 15 },
+        { wch: 16 },
+        { wch: 18 },
+        { wch: 12 },
+        { wch: 22 },
+        { wch: 16 }
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "新竹物流託運單");
+
+      const now = new Date();
+      const timeStamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+
+      XLSX.writeFile(workbook, `新竹物流託運單匯入檔_${timeStamp}.xlsx`);
+      showToast(`已成功匯出新竹物流 Excel 檔 (${seq - 1} 筆資料)`, 'success');
+    }
+  </script>
+</body>
+</html>
