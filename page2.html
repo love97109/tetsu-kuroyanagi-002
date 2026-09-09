@@ -24,6 +24,14 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
+    /* Fallback SVG sizing rules to prevent unstyled layout explosion */
+    svg {
+      display: inline-block !important;
+      vertical-align: middle;
+      flex-shrink: 0 !important;
+      max-width: 100%;
+    }
+
     .jp-card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
@@ -69,6 +77,7 @@
       body.printing-a5 footer,
       body.printing-a5 #toast-container,
       body.printing-a5 #mapping-modal,
+      body.printing-a5 #gemini-modal,
       body.printing-a5 main {
         display: none !important;
       }
@@ -137,7 +146,7 @@
     <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3">
         <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-          <svg class="w-5 h-5 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="20" height="20" class="w-5 h-5 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
           </svg>
           對應表設定 (手動備援模式)
@@ -155,6 +164,52 @@
           <span class="text-xs font-bold text-slate-800 block">選項 A：上傳對應表檔 (.xlsx / .csv)</span>
           <p class="text-[11px] text-slate-500">上傳含有「型號」與「細目」欄位的 Excel / CSV 對應表檔。</p>
           <input type="file" id="mapping-file-input" accept=".xlsx, .xls, .csv" onchange="handleMappingFileUpload(event)" class="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-800 hover:file:bg-slate-300 cursor-pointer">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gemini AI Address Validation Modal -->
+  <div id="gemini-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-4 border border-slate-200 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
+        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <svg width="20" height="20" class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+          </svg>
+          AI 地址智慧校對 & 驗證 (Gemini)
+        </h3>
+        <button onclick="closeGeminiAddressModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+      </div>
+
+      <div class="flex-grow overflow-y-auto space-y-4 text-xs text-slate-600 pr-1">
+        <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-3 space-y-1 text-indigo-900">
+          <p class="font-bold">💡 Gemini 智慧校對說明：</p>
+          <p>系統將檢查目前訂單中的收件地址是否有「缺漏縣市/鄉鎮區」、「郵遞區號錯誤」或「門牌號不齊全」等問題，維護物流送達率。</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button onclick="runGeminiAddressAI()" class="p-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg font-bold flex flex-col items-center justify-center gap-1.5 transition-colors text-center shadow-sm">
+            <span class="text-sm">⚡ 線上即時 AI 地址診斷</span>
+            <span class="text-[10px] font-normal text-indigo-200">直接呼叫 Gemini 模型線上進行診斷</span>
+          </button>
+
+          <button onclick="exportAddressCheckAndOpenGemini()" class="p-3 bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white rounded-lg font-bold flex flex-col items-center justify-center gap-1.5 transition-colors text-center shadow-sm border border-slate-700">
+            <span class="text-sm">🚀 匯出 Excel 並跳轉 Gemini 網頁</span>
+            <span class="text-[10px] font-normal text-slate-300">下載檢核檔 + 自動複製提示詞至剪貼簿</span>
+          </button>
+        </div>
+
+        <!-- AI Output Box -->
+        <div id="gemini-ai-status" class="hidden p-3 rounded-lg border bg-slate-50 border-slate-200">
+          <div class="flex items-center gap-2 font-bold mb-2 text-slate-800" id="gemini-status-title">
+            <svg class="w-4 h-4 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Gemini AI 分析中...</span>
+          </div>
+          <div id="gemini-ai-results" class="space-y-2 text-slate-700 font-mono text-[11px] whitespace-pre-wrap max-h-60 overflow-y-auto p-2 bg-white rounded border border-slate-200"></div>
         </div>
       </div>
     </div>
@@ -181,13 +236,13 @@
         </button>
 
         <button onclick="fetchGoogleSheetMapping()" title="重新同步對應表" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="16" height="16" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
           </svg>
         </button>
 
         <button onclick="openMappingModal()" title="設定對應表" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="16" height="16" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
           </svg>
@@ -199,18 +254,18 @@
   <!-- MAIN CONTENT CONTAINER -->
   <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-    <!-- Upload & Quick Action Section -->
+    <!-- Upload & Quick Action Section (3 Column Grid) -->
     <section class="no-print grid grid-cols-1 lg:grid-cols-3 gap-6">
       
-      <!-- Drag & Drop File Upload Box -->
-      <div class="lg:col-span-2 jp-card p-6 flex flex-col justify-between">
+      <!-- 1. Drag & Drop File Upload Box -->
+      <div class="jp-card p-6 flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <svg class="w-4 h-4 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg width="16" height="16" class="w-4 h-4 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
               </svg>
-              上傳 Excel / Shopify CSV 訂單檔案 (.xlsx / .xls / .csv)
+              上傳 Excel / Shopify CSV 訂單檔案
             </h2>
             <span class="text-xs text-slate-400 font-mono">預設讀取單號與 U 列型號</span>
           </div>
@@ -218,7 +273,7 @@
           <label class="border-2 border-dashed border-slate-300 hover:border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50/50 hover:bg-slate-100/50">
             <input type="file" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleFileUpload(event)">
             <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center mb-3">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg width="24" height="24" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
               </svg>
             </div>
@@ -238,50 +293,94 @@
         </div>
       </div>
 
-      <!-- Quick Action Panel: A5 Print & Hsinchu Logistics Export -->
+      <!-- 2. Quick Action Panel: A5 Print -->
       <div class="jp-card p-6 flex flex-col justify-between bg-white border border-slate-200 rounded-xl shadow-sm">
         <div>
           <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <svg class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width="16" height="16" class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 000-4h-6a2 2 0 000 4zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
             </svg>
-            出貨功能模組
+            A5 出貨彙整模組
           </h2>
-          <p class="text-xs text-slate-500 leading-relaxed mb-4">
-            解析訂單後，可快速產生 A5 尺寸品項對裁清單或匯出新竹物流託運格式檔。
+          <p class="text-xs text-slate-500 leading-relaxed mb-3">
+            解析訂單後，可快速產生 A5 尺寸品項對裁清單供現場人員包貨。
           </p>
 
-          <!-- Checkbox: Exclude TK Accessories -->
-          <div class="mb-4 flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-            <input type="checkbox" id="exclude-tk-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer" checked>
-            <label for="exclude-tk-checkbox" class="text-xs font-semibold text-slate-700 cursor-pointer select-none">
-              列印時排除配件 (型號開頭為 TK)
-            </label>
+          <!-- Options -->
+          <div class="space-y-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 mb-4">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="exclude-tk-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer" checked>
+              <label for="exclude-tk-checkbox" class="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                列印時排除配件 (型號開頭為 TK)
+              </label>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="exclude-nomodel-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer" checked>
+              <label for="exclude-nomodel-checkbox" class="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                列印時排除無型號品項
+              </label>
+            </div>
           </div>
         </div>
 
-        <div class="space-y-3">
-          <button onclick="printA5Summary()" class="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-bold text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 border border-slate-800">
-            <svg class="w-4 h-4 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 000-4h-6a2 2 0 000 4zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-            </svg>
-            列印出貨彙整 (A5)
-          </button>
+        <button onclick="printA5Summary()" class="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-bold text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 border border-slate-800">
+          <svg width="16" height="16" class="w-4 h-4 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 000-4h-6a2 2 0 000 4zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+          </svg>
+          列印出貨彙整 (A5)
+        </button>
+      </div>
 
+      <!-- 3. Hsinchu Logistics Export Module -->
+      <div class="jp-card p-6 flex flex-col justify-between bg-white border border-slate-200 rounded-xl shadow-sm">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <svg width="16" height="16" class="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2m-4-1v8m0 0l3-3m-3 3L9 8m-5 5h2.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293h3.172a1 1 0 00.707-.293l2.414-2.414a1 1 0 01.707-.293H20"></path>
+            </svg>
+            新竹物流託運單匯出
+          </h2>
+          <p class="text-xs text-slate-500 leading-relaxed mb-3">
+            將解析後的收件人姓名、電話與地址轉換為新竹物流託運系統專用的標準 Excel 匯入格式。
+          </p>
+
+          <div class="mb-4 p-2.5 bg-emerald-50/60 border border-emerald-200/80 rounded-lg text-xs text-emerald-800 space-y-1">
+            <div class="flex items-center gap-1.5 font-semibold">
+              <svg width="14" height="14" class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+              </svg>
+              自動合併地址 (AO + AN + AJ)
+            </div>
+            <p class="text-[11px] text-emerald-700 leading-tight">
+              匯出檔案符合 12 欄位標準，包含預設才積、數量與格式對應。
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-2.5">
           <button onclick="exportHsinchuLogisticsExcel()" class="w-full py-3 px-4 bg-emerald-800 hover:bg-emerald-900 active:bg-emerald-950 text-white font-bold text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 border border-emerald-900">
-            <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width="16" height="16" class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             匯出新竹物流 Excel 檔
           </button>
+
+          <!-- Gemini Address AI Validation -->
+          <button onclick="openGeminiAddressModal()" class="w-full py-2.5 px-4 bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white font-bold text-xs rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 border border-indigo-800">
+            <svg width="16" height="16" class="w-4 h-4 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+            </svg>
+            AI 地址智慧校對 & 驗證 (Gemini)
+          </button>
         </div>
       </div>
+
     </section>
 
     <!-- Empty State Prompt -->
     <div id="empty-state" class="jp-card p-12 text-center my-8 bg-white border border-slate-200 rounded-xl shadow-sm">
       <div class="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
-        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg width="32" height="32" class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
         </svg>
       </div>
@@ -448,6 +547,18 @@
       document.getElementById('mapping-modal').classList.add('hidden');
     }
 
+    function openGeminiAddressModal() {
+      if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) {
+        showToast('請先上傳並解析 Excel 訂單檔案！', 'error');
+        return;
+      }
+      document.getElementById('gemini-modal').classList.remove('hidden');
+    }
+
+    function closeGeminiAddressModal() {
+      document.getElementById('gemini-modal').classList.add('hidden');
+    }
+
     function handleMappingFileUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -481,73 +592,87 @@
     }
 
     /* ==========================================================================
-       GOOGLE SHEET MAPPING FETCH (SAFE FETCH + LOCALSTORAGE CACHE FALLBACK)
+       GOOGLE SHEET MAPPING FETCH (JSONP + FETCH + LOCAL STORAGE CACHE FALLBACK)
        ========================================================================== */
-    async function fetchGoogleSheetMapping() {
+    function fetchGoogleSheetMapping() {
       updateSyncUI('loading', '同步對應表中...');
 
-      const directUrl1 = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GOOGLE_SHEET_GID}`;
-      const directUrl2 = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv&gid=${GOOGLE_SHEET_GID}`;
-      const proxyUrl1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl1)}`;
+      let isFinished = false;
+      const timeoutTimer = setTimeout(() => {
+        if (!isFinished) {
+          isFinished = true;
+          tryFallbackCacheOrWarn('連線超時，使用備援');
+        }
+      }, 5000);
 
-      const fetchTargets = [
-        { url: directUrl1, name: 'GVIZ CSV' },
-        { url: directUrl2, name: 'Export CSV' },
-        { url: proxyUrl1, name: 'CORS Proxy' }
-      ];
+      // Method 1: JSONP Callback (Safe for file:// and cross-origin)
+      const callbackName = 'google_sheet_jsonp_cb_' + Date.now();
+      window[callbackName] = function(jsonResponse) {
+        if (isFinished) return;
+        isFinished = true;
+        clearTimeout(timeoutTimer);
 
-      let csvText = null;
+        delete window[callbackName];
+        if (scriptElem && scriptElem.parentNode) {
+          scriptElem.parentNode.removeChild(scriptElem);
+        }
 
-      for (const target of fetchTargets) {
         try {
-          const res = await fetch(target.url);
-          if (res.ok) {
-            const txt = await res.text();
-            if (txt && txt.length > 30 && !txt.startsWith('<!DOCTYPE html>')) {
-              csvText = txt;
-              break;
-            }
+          const rows = [];
+          if (jsonResponse && jsonResponse.table && jsonResponse.table.rows) {
+            jsonResponse.table.rows.forEach(r => {
+              const rowCells = (r.c || []).map(cell => (cell && cell.v !== null && cell.v !== undefined) ? cell.v : '');
+              rows.push(rowCells);
+            });
+          }
+          if (rows.length > 0) {
+            processMappingRows(rows);
+            isMappingLoaded = true;
+            try { localStorage.setItem('cached_mapping_rows', JSON.stringify(rows)); } catch (e) {}
+            updateSyncUI('success', `對應表就緒 (${modelToDetailMap.size} 型號)`);
+            showToast(`Google 試算表同步成功！已載入 ${modelToDetailMap.size} 筆對應`, 'success');
+            if (rawExcelRows.length > 0) processExcelRows(rawExcelRows);
+            return;
           }
         } catch (e) {
-          console.warn(`Fetch mapping via ${target.name} failed silently:`, e);
+          console.warn('JSONP parsing error:', e);
         }
-      }
+        tryFallbackCacheOrWarn('解析資料異常');
+      };
 
-      if (csvText) {
-        try {
-          localStorage.setItem('cached_mapping_csv', csvText);
-        } catch (e) { }
-
-        parseGoogleSheetCSV(csvText);
-        isMappingLoaded = true;
-        updateSyncUI('success', `對應表就緒 (${modelToDetailMap.size} 型號)`);
-        showToast(`Google 試算表同步成功！已載入 ${modelToDetailMap.size} 筆對應`, 'success');
-
-        if (rawExcelRows.length > 0) {
-          processExcelRows(rawExcelRows);
+      const gvizUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=responseHandler:${callbackName}&gid=${GOOGLE_SHEET_GID}`;
+      const scriptElem = document.createElement('script');
+      scriptElem.src = gvizUrl;
+      scriptElem.onerror = function() {
+        if (!isFinished) {
+          isFinished = true;
+          clearTimeout(timeoutTimer);
+          delete window[callbackName];
+          tryFallbackCacheOrWarn('連線受阻，使用備援');
         }
-        return;
-      }
+      };
+      document.head.appendChild(scriptElem);
+    }
 
-      // Check cached mapping in localStorage
-      const cachedCsv = localStorage.getItem('cached_mapping_csv');
-      if (cachedCsv) {
+    function tryFallbackCacheOrWarn(msg) {
+      const cachedData = localStorage.getItem('cached_mapping_rows');
+      if (cachedData) {
         try {
-          parseGoogleSheetCSV(cachedCsv);
-          isMappingLoaded = true;
-          updateSyncUI('warning', `離線快取對應 (${modelToDetailMap.size} 型號)`);
-          showToast(`已自動從本地快取載入對應表 (${modelToDetailMap.size} 筆)`, 'info');
-
-          if (rawExcelRows.length > 0) {
-            processExcelRows(rawExcelRows);
+          const rows = JSON.parse(cachedData);
+          if (rows && rows.length > 0) {
+            processMappingRows(rows);
+            isMappingLoaded = true;
+            updateSyncUI('warning', `離線快取對應 (${modelToDetailMap.size} 型號)`);
+            showToast(`已自動載入本地快取對應表 (${modelToDetailMap.size} 筆)`, 'info');
+            if (rawExcelRows.length > 0) processExcelRows(rawExcelRows);
+            return;
           }
-          return;
-        } catch (e) { }
+        } catch (e) {}
       }
 
       isMappingLoaded = false;
       updateSyncUI('error', '同步失敗 (點此手動設定)');
-      showToast('無法讀取 Google 試算表，請點擊右上角設定按鈕手動設定對應表', 'warning');
+      showToast(`${msg}。請點擊右上角⚙️按鈕手動上傳對應表`, 'warning');
     }
 
     function updateSyncUI(state, text) {
@@ -572,45 +697,6 @@
     /* ==========================================================================
        CSV & DATA CLEANING UTILITIES
        ========================================================================== */
-    function parseCSV(text) {
-      if (!text) return [];
-      const p = [[]];
-      let row = p[0];
-      let inQuotes = false;
-      let token = '';
-
-      for (let i = 0; i < text.length; i++) {
-        const c = text[i];
-        const nextC = text[i + 1];
-
-        if (c === '"') {
-          if (inQuotes && nextC === '"') {
-            token += '"';
-            i++;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (c === ',' && !inQuotes) {
-          row.push(token);
-          token = '';
-        } else if ((c === '\r' || c === '\n') && !inQuotes) {
-          if (c === '\r' && nextC === '\n') {
-            i++;
-          }
-          row.push(token);
-          token = '';
-          row = [];
-          p.push(row);
-        } else {
-          token += c;
-        }
-      }
-      if (token || row.length > 0) {
-        row.push(token);
-      }
-      return p.filter(r => r.length > 0 && r.some(cell => String(cell).trim() !== ''));
-    }
-
     function normalizeKey(str) {
       if (!str) return '';
       return String(str)
@@ -619,11 +705,6 @@
         .replace(/\s+/g, ' ')
         .trim()
         .toUpperCase();
-    }
-
-    function parseGoogleSheetCSV(csvText) {
-      const rows = parseCSV(csvText);
-      processMappingRows(rows);
     }
 
     function processMappingRows(rows) {
@@ -992,7 +1073,6 @@
         );
 
         if (hasNoModelItem) {
-          // 紅底白字醒目卡片樣式
           card.className = 'jp-card print-card p-4 bg-rose-600 text-white border-rose-700 relative overflow-hidden shadow-lg';
 
           const itemsHtml = order.items.map(item => `
@@ -1009,7 +1089,7 @@
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-rose-400/50 pb-3 mb-3 print:border-black">
               <div class="flex items-center gap-3">
                 <span class="px-2 py-0.5 bg-rose-900/80 border border-rose-300/50 text-white font-mono text-xs font-bold rounded print:bg-white print:border-black print:text-black flex items-center gap-1">
-                  <svg class="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
+                  <svg width="14" height="14" class="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                   </svg>
                   #${cardNum++} [含無型號品項]
@@ -1045,7 +1125,6 @@
             </div>
           `;
         } else {
-          // 標準白底卡片樣式
           card.className = 'jp-card print-card p-4 bg-white relative overflow-hidden';
 
           const itemsHtml = order.items.map(item => `
@@ -1133,6 +1212,7 @@
       if (!container) return;
 
       const excludeTk = document.getElementById('exclude-tk-checkbox')?.checked || false;
+      const excludeNoModel = document.getElementById('exclude-nomodel-checkbox')?.checked || false;
 
       const now = new Date();
       const timeStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -1147,6 +1227,7 @@
         return detailA.localeCompare(detailB, 'zh-TW');
       });
 
+      // Filter exclusions
       if (excludeTk) {
         sortedSummaries = sortedSummaries.filter(([detailName, data]) => {
           const models = Array.from(data.originalModels || []);
@@ -1154,6 +1235,12 @@
             return !normalizeKey(detailName).startsWith('TK');
           }
           return !models.some(m => normalizeKey(m).startsWith('TK'));
+        });
+      }
+
+      if (excludeNoModel) {
+        sortedSummaries = sortedSummaries.filter(([detailName]) => {
+          return detailName !== '無型號品項' && !detailName.includes('無型號品項');
         });
       }
 
@@ -1182,6 +1269,11 @@
         `;
       });
 
+      let tags = [];
+      if (excludeTk) tags.push('已排除配件 TK');
+      if (excludeNoModel) tags.push('已排除無型號品項');
+      const tagText = tags.length > 0 ? `<span style="font-size: 9px; font-weight: normal; color: #555; margin-left: 4px;">[${tags.join(' / ')}]</span>` : '';
+
       container.innerHTML = `
         <div style="display: flex; width: 297mm; height: 210mm; position: relative; box-sizing: border-box; background: #fff; font-family: 'Noto Sans TC', sans-serif;">
           
@@ -1193,7 +1285,7 @@
               <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 6px;">
                 <div>
                   <h2 style="font-size: 15px; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
-                    品項細目出貨彙整表 (A5) ${excludeTk ? '<span style="font-size: 10px; font-weight: normal; color: #444; margin-left: 4px;">[已排除配件 TK]</span>' : ''}
+                    品項細目出貨彙整表 (A5) ${tagText}
                   </h2>
                   <span style="font-size: 9px; color: #333;">列印時間：${timeStr}</span>
                 </div>
@@ -1309,6 +1401,103 @@
 
       XLSX.writeFile(workbook, `新竹物流託運單匯入檔_${timeStamp}.xlsx`);
       showToast(`已成功匯出新竹物流 Excel 檔 (${seq - 1} 筆資料)`, 'success');
+    }
+
+    /* ==========================================================================
+       GEMINI AI ADDRESS VALIDATION FUNCTIONS
+       ========================================================================== */
+    async function runGeminiAddressAI() {
+      if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) return;
+
+      const statusBox = document.getElementById('gemini-ai-status');
+      const statusTitle = document.getElementById('gemini-status-title');
+      const resultsDiv = document.getElementById('gemini-ai-results');
+
+      statusBox.classList.remove('hidden');
+      statusTitle.innerHTML = `
+        <svg class="w-4 h-4 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Gemini AI 正在為您逐筆校對台灣地址...</span>
+      `;
+      resultsDiv.textContent = '分析中... 請稍候';
+
+      const addressList = [];
+      let idx = 1;
+      lastProcessedOrdersMap.forEach((order) => {
+        addressList.push(`${idx++}. 單號: ${order.orderId} | 姓名: ${order.name} | 電話: ${order.phone} | 地址: ${order.address}`);
+      });
+
+      const promptText = `你是一位專業的台灣物流地址驗證專家。請檢查以下訂單的收件地址，列出有「疑慮/錯誤/缺漏」的項目（例如：缺少縣市、鄉鎮市區、門牌號碼不完整、郵遞區號錯漏或有簡體字錯字），並提供標準建議格式。如果全部地址都正確無誤，請明確回覆「所有訂單地址皆格式完整正確」。
+
+待校對地址清單：
+${addressList.slice(0, 50).join('\n')}
+`;
+
+      try {
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }]
+          })
+        });
+
+        const result = await response.json();
+        const candidateText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (candidateText) {
+          statusTitle.innerHTML = `<span class="text-emerald-700 font-bold">✅ Gemini AI 診斷完畢</span>`;
+          resultsDiv.textContent = candidateText;
+        } else {
+          statusTitle.innerHTML = `<span class="text-rose-600 font-bold">⚠️ 回傳格式不符合預期</span>`;
+          resultsDiv.textContent = '請嘗試使用「匯出 Excel 並跳轉 Gemini 網頁」進行手動查詢。';
+        }
+
+      } catch (err) {
+        console.error(err);
+        statusTitle.innerHTML = `<span class="text-rose-600 font-bold">❌ 連線失敗</span>`;
+        resultsDiv.textContent = '無法連線至 Gemini API，請使用按鈕 2 匯出 Excel 並於官網貼上查詢。';
+      }
+    }
+
+    function exportAddressCheckAndOpenGemini() {
+      if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) return;
+
+      const exportData = [["項次", "訂單號", "收件人姓名", "聯絡電話", "待校對收件地址"]];
+      let seq = 1;
+      lastProcessedOrdersMap.forEach((order) => {
+        exportData.push([seq++, order.orderId, order.name, order.phone, order.address]);
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+      worksheet['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 50 }];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "待驗證地址清單");
+      XLSX.writeFile(workbook, `待校對地址清單_${Date.now()}.xlsx`);
+
+      const promptTemplate = `請扮演台灣物流地址校對專家，幫我檢查剛剛下載的上傳檔中的地址。請比對是否有缺漏縣市、鄉鎮區或門牌不完整，並提供修正後地址標籤。`;
+
+      try {
+        const dummyInput = document.createElement('textarea');
+        dummyInput.value = promptTemplate;
+        document.body.appendChild(dummyInput);
+        dummyInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(dummyInput);
+        showToast('已複製 AI 校對指令至剪貼簿！已下載 Excel 檢核檔', 'success');
+      } catch (e) {
+        showToast('已下載 Excel 檢核檔，請直接前往 Gemini 上傳分析', 'info');
+      }
+
+      setTimeout(() => {
+        window.open('https://gemini.google.com', '_blank');
+      }, 800);
     }
   </script>
 </body>
