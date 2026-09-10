@@ -171,8 +171,10 @@
 
   <!-- Gemini AI Address Validation Modal -->
   <div id="gemini-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-4 border border-slate-200 max-h-[90vh] flex flex-col">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
+    <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full p-6 space-y-5 border border-slate-200">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
         <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
           <svg width="20" height="20" class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
@@ -182,36 +184,45 @@
         <button onclick="closeGeminiAddressModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
       </div>
 
-      <div class="flex-grow overflow-y-auto space-y-4 text-xs text-slate-600 pr-1">
-        <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-3 space-y-1 text-indigo-900">
-          <p class="font-bold">💡 Gemini 智慧校對說明：</p>
-          <p>系統將檢查目前訂單中的收件地址是否有「缺漏縣市/鄉鎮區」、「郵遞區號錯誤」或「門牌號不齊全」等問題，維護物流送達率。</p>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button onclick="runGeminiAddressAI()" class="p-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg font-bold flex flex-col items-center justify-center gap-1.5 transition-colors text-center shadow-sm">
-            <span class="text-sm">⚡ 線上即時 AI 地址診斷</span>
-            <span class="text-[10px] font-normal text-indigo-200">直接呼叫 Gemini 模型線上進行診斷</span>
-          </button>
-
-          <button onclick="exportAddressCheckAndOpenGemini()" class="p-3 bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white rounded-lg font-bold flex flex-col items-center justify-center gap-1.5 transition-colors text-center shadow-sm border border-slate-700">
-            <span class="text-sm">🚀 匯出 Excel 並跳轉 Gemini 網頁</span>
-            <span class="text-[10px] font-normal text-slate-300">下載檢核檔 + 自動複製提示詞至剪貼簿</span>
-          </button>
-        </div>
-
-        <!-- AI Output Box -->
-        <div id="gemini-ai-status" class="hidden p-3 rounded-lg border bg-slate-50 border-slate-200">
-          <div class="flex items-center gap-2 font-bold mb-2 text-slate-800" id="gemini-status-title">
-            <svg class="w-4 h-4 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Gemini AI 分析中...</span>
-          </div>
-          <div id="gemini-ai-results" class="space-y-2 text-slate-700 font-mono text-[11px] whitespace-pre-wrap max-h-60 overflow-y-auto p-2 bg-white rounded border border-slate-200"></div>
-        </div>
+      <!-- Description Banner -->
+      <div class="bg-indigo-50/80 border border-indigo-100 rounded-lg p-3.5 text-xs text-indigo-900 space-y-1">
+        <p class="font-bold flex items-center gap-1.5">
+          <span>💡</span> Gemini 智慧地址校對說明：
+        </p>
+        <p class="leading-relaxed text-indigo-800">
+          透過 AI 檢查訂單地址是否有「缺漏縣市/鄉鎮區」、「郵遞區號錯誤」或「門牌不完整」等問題，維護物流高送達率。
+        </p>
       </div>
+
+      <!-- Step-by-Step Instructions -->
+      <div class="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+        <p class="font-bold text-slate-800 text-xs tracking-wider uppercase">📋 簡易操作 3 步驟：</p>
+        
+        <ol class="space-y-2 text-slate-600 list-decimal pl-4">
+          <li class="leading-relaxed">
+            <strong class="text-slate-800">點擊下方按鈕</strong>：系統將自動下載 <code class="bg-slate-200 px-1 py-0.5 rounded text-[11px] font-mono text-slate-800">待校對地址清單.xlsx</code>，並將專用提示詞自動複製至剪貼簿。
+          </li>
+          <li class="leading-relaxed">
+            <strong class="text-slate-800">上傳 Excel 檔案</strong>：畫面自動開啓 Gemini 網站，點擊 Gemini 對話框左側的 <span class="font-bold text-indigo-700">+ (加號)</span> 圖示，選擇剛剛下載的 Excel 檔。
+          </li>
+          <li class="leading-relaxed">
+            <strong class="text-slate-800">貼上指令並送出</strong>：在 Gemini 輸入框按 <kbd class="px-1.5 py-0.5 bg-white border border-slate-300 rounded shadow-xs font-mono text-[10px]">Ctrl + V</kbd> 貼上指令，點擊送出即可獲得完整校對報告！
+          </li>
+        </ol>
+      </div>
+
+      <!-- Main Action Button -->
+      <div>
+        <button onclick="exportAddressCheckAndOpenGemini()" class="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md transition-all flex flex-col items-center justify-center gap-1 border border-indigo-700">
+          <span class="flex items-center gap-2 text-base">
+            🚀 匯出 Excel 並跳轉 Gemini 網頁
+          </span>
+          <span class="text-[11px] font-normal text-indigo-200">
+            自動複製 Prompt 指令 ➔ 下載檢核檔 ➔ 開啟 Gemini 網頁
+          </span>
+        </button>
+      </div>
+
     </div>
   </div>
 
@@ -1441,67 +1452,11 @@
     /* ==========================================================================
        GEMINI AI ADDRESS VALIDATION FUNCTIONS
        ========================================================================== */
-    async function runGeminiAddressAI() {
-      if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) return;
-
-      const statusBox = document.getElementById('gemini-ai-status');
-      const statusTitle = document.getElementById('gemini-status-title');
-      const resultsDiv = document.getElementById('gemini-ai-results');
-
-      statusBox.classList.remove('hidden');
-      statusTitle.innerHTML = `
-        <svg class="w-4 h-4 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <span>Gemini AI 正在為您逐筆校對台灣地址...</span>
-      `;
-      resultsDiv.textContent = '分析中... 請稍候';
-
-      const addressList = [];
-      let idx = 1;
-      lastProcessedOrdersMap.forEach((order) => {
-        addressList.push(`${idx++}. 單號: ${order.orderId} | 姓名: ${order.name} | 電話: ${order.phone} | 地址: ${order.address}`);
-      });
-
-      const promptText = `你是一位專業的台灣物流地址驗證專家。請檢查以下訂單的收件地址，列出有「疑慮/錯誤/缺漏」的項目（例如：缺少縣市、鄉鎮市區、門牌號碼不完整、郵遞區號錯漏或有簡體字錯字），並提供標準建議格式。如果全部地址都正確無誤，請明確回覆「所有訂單地址皆格式完整正確」。
-
-待校對地址清單：
-${addressList.slice(0, 50).join('\n')}
-`;
-
-      try {
-        const apiKey = "";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }]
-          })
-        });
-
-        const result = await response.json();
-        const candidateText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (candidateText) {
-          statusTitle.innerHTML = `<span class="text-emerald-700 font-bold">✅ Gemini AI 診斷完畢</span>`;
-          resultsDiv.textContent = candidateText;
-        } else {
-          statusTitle.innerHTML = `<span class="text-rose-600 font-bold">⚠️ 回傳格式不符合預期</span>`;
-          resultsDiv.textContent = '請嘗試使用「匯出 Excel 並跳轉 Gemini 網頁」進行手動查詢。';
-        }
-
-      } catch (err) {
-        console.error(err);
-        statusTitle.innerHTML = `<span class="text-rose-600 font-bold">❌ 連線失敗</span>`;
-        resultsDiv.textContent = '無法連線至 Gemini API，請使用按鈕 2 匯出 Excel 並於官網貼上查詢。';
-      }
-    }
-
     function exportAddressCheckAndOpenGemini() {
-      if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) return;
+      if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) {
+        showToast('請先上傳並解析 Excel 訂單檔案！', 'error');
+        return;
+      }
 
       const exportData = [["項次", "訂單號", "收件人姓名", "聯絡電話", "待校對收件地址"]];
       let seq = 1;
@@ -1514,9 +1469,18 @@ ${addressList.slice(0, 50).join('\n')}
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "待驗證地址清單");
-      XLSX.writeFile(workbook, `待校對地址清單_${Date.now()}.xlsx`);
 
-      const promptTemplate = `請扮演台灣物流地址校對專家，幫我檢查剛剛下載的上傳檔中的地址。請比對是否有缺漏縣市、鄉鎮區或門牌不完整，並提供修正後地址標籤。`;
+      const now = new Date();
+      const timeStamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+
+      XLSX.writeFile(workbook, `待校對地址清單_${timeStamp}.xlsx`);
+
+      const promptTemplate = `請扮演台灣專業物流地址校對專家，幫我檢查上傳的 Excel 檔案中的「待校對收件地址」欄位。
+
+請詳細檢查並列出：
+1. 【有疑慮/錯誤/缺漏的地址】：包含缺少縣市/鄉鎮區、郵遞區號不對、門牌號碼不完整、或有錯別字/簡體字等問題。
+2. 【建議修正對照】：針對有問題的項目，提供標準正確格式的地址。
+3. 如果所有地址皆完整無誤，請明確回覆「所有訂單地址皆格式完整正確」。`;
 
       try {
         const dummyInput = document.createElement('textarea');
