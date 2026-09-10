@@ -917,7 +917,7 @@
         const zip = cleanStr(row[colIdx.zip]);
         const district = cleanStr(row[colIdx.district]);
         const addressDetail = cleanStr(row[colIdx.detailAddr]);
-        const phone = cleanStr(row[colIdx.phone]);
+        const phone = formatPhoneNumber(row[colIdx.phone]);
 
         let qty = 1;
 
@@ -998,12 +998,44 @@
 
     function cleanStr(val) {
       if (val === null || val === undefined) return '';
-      return String(val).trim();
+      return String(val).trim().replace(/^['’]+/, '');
+    }
+
+    function formatPhoneNumber(phone) {
+      if (phone === null || phone === undefined) return '';
+      let str = String(phone).trim().replace(/^['’]+/, '');
+      if (!str) return '';
+
+      // 去除國際碼 +886 或 886
+      if (str.startsWith('+886')) {
+        str = '0' + str.slice(4);
+      } else if (str.startsWith('886') && str.length >= 11) {
+        str = '0' + str.slice(3);
+      }
+
+      // 提取所有數字
+      const digits = str.replace(/[^\d]/g, '');
+
+      // 若為 9 碼且以 9 開頭 (如 922346369 -> 0922346369)
+      if (/^9\d{8}$/.test(digits)) {
+        return '0' + digits;
+      }
+
+      // 若不以 0 開頭且以 9 開頭的台灣號碼
+      if (!digits.startsWith('0') && digits.startsWith('9')) {
+        return '0' + digits;
+      }
+
+      return digits || str;
     }
 
     function assembleAddress(zip, district, detail) {
-      const parts = [zip, district, detail].filter(p => Boolean(p && p.trim()));
-      return parts.join(' ');
+      const cleanZip = cleanStr(zip);
+      const cleanDist = cleanStr(district);
+      const cleanDet = cleanStr(detail);
+      const parts = [cleanZip, cleanDist, cleanDet].filter(p => Boolean(p && p.trim()));
+      let fullAddr = parts.join(' ').trim();
+      return fullAddr.replace(/^['’]+/, '');
     }
 
     /* ==========================================================================
@@ -1360,12 +1392,15 @@
 
       let seq = 1;
       lastProcessedOrdersMap.forEach((order) => {
+        const cleanAddr = (order.address || '').replace(/^['’]+/, '').trim();
+        const formattedPhone = formatPhoneNumber(order.phone || '');
+
         exportData.push([
           '',
           order.orderId || '',
           order.name || '',
-          order.address || '',
-          order.phone || '',
+          cleanAddr,
+          formattedPhone,
           '',
           '',
           1,
