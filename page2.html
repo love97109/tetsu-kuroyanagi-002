@@ -1084,13 +1084,11 @@
         const modelsStr = Array.from(data.originalModels).map(m => escapeHtml(m)).join(', ');
         const orderIdsStr = Array.from(data.orderIds || []).map(o => escapeHtml(o)).join(', ');
 
-        const isNoModel = detailName === '無型號品項';
-        const textColorClass = isNoModel 
-          ? 'text-red-600 font-bold' 
-          : (data.isMapped ? 'text-slate-900' : 'text-amber-700');
+        const isUnmapped = detailName === '無型號品項' || detailName.includes('未對應細目') || !data.isMapped;
+        const textColorClass = isUnmapped ? 'text-red-600 font-bold' : 'text-slate-900';
 
         let detailDisplay = escapeHtml(detailName);
-        if (isNoModel && data.orderIds && data.orderIds.size > 0) {
+        if (isUnmapped && data.orderIds && data.orderIds.size > 0) {
           detailDisplay += ` <span class="text-xs font-normal text-red-500 font-mono">(訂單: ${orderIdsStr})</span>`;
         }
 
@@ -1112,7 +1110,9 @@
         const card = document.createElement('div');
         
         const hasNoModelItem = order.items.some(item => 
-          item.detailName === '無型號品項' || item.detailName.includes('無型號品項')
+          item.detailName === '無型號品項' || 
+          item.detailName.includes('無型號品項') || 
+          item.detailName.includes('未對應細目')
         );
 
         if (hasNoModelItem) {
@@ -1135,7 +1135,7 @@
                   <svg width="14" height="14" class="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                   </svg>
-                  #${cardNum++} [含無型號品項]
+                  #${cardNum++} [含未對應/無型號品項]
                 </span>
                 <div>
                   <span class="text-[10px] text-rose-100 print:text-black uppercase tracking-wider block">訂單編號 (A列)</span>
@@ -1283,86 +1283,155 @@
 
       if (excludeNoModel) {
         sortedSummaries = sortedSummaries.filter(([detailName]) => {
-          return detailName !== '無型號品項' && !detailName.includes('無型號品項');
+          return detailName !== '無型號品項' && !detailName.includes('無型號品項') && !detailName.includes('未對應細目');
         });
       }
 
       let totalItemsQty = 0;
-      let rowsHtml = '';
-      let idx = 1;
-
-      sortedSummaries.forEach(([detailName, data]) => {
+      sortedSummaries.forEach(([, data]) => {
         totalItemsQty += data.totalQty;
-        const isNoModel = detailName === '無型號品項';
-        const orderIdsStr = Array.from(data.orderIds || []).map(o => escapeHtml(o)).join(', ');
-
-        let detailDisplay = escapeHtml(detailName);
-        if (isNoModel && data.orderIds && data.orderIds.size > 0) {
-          detailDisplay += ` <span style="font-weight: normal; font-size: 9px; color: #dc2626;">(訂單: ${orderIdsStr})</span>`;
-        }
-
-        const fontStyle = isNoModel ? 'color: #dc2626; font-weight: bold;' : 'font-weight: bold;';
-
-        rowsHtml += `
-          <tr style="border-bottom: 1px solid #000;">
-            <td style="padding: 3px 5px; text-align: center; border-right: 1px solid #000; font-family: monospace;">${idx++}</td>
-            <td style="padding: 3px 5px; ${fontStyle} border-right: 1px solid #000; font-size: 10.5px;">${detailDisplay}</td>
-            <td style="padding: 3px 5px; text-align: center; font-weight: bold; font-size: 12px; font-family: monospace;">${data.totalQty}</td>
-          </tr>
-        `;
       });
 
       let tags = [];
       if (excludeTk) tags.push('已排除配件 TK');
       if (excludeNoModel) tags.push('已排除無型號品項');
-      const tagText = tags.length > 0 ? `<span style="font-size: 9px; font-weight: normal; color: #555; margin-left: 4px;">[${tags.join(' / ')}]</span>` : '';
+      const tagText = tags.length > 0 ? `<span style="font-size: 8.5pt; font-weight: normal; color: #555; margin-left: 6px;">[${tags.join(' / ')}]</span>` : '';
 
-      container.innerHTML = `
-        <div style="display: flex; width: 297mm; height: 210mm; position: relative; box-sizing: border-box; background: #fff; font-family: 'Noto Sans TC', sans-serif;">
-          
-          <!-- Left Half: A5 Order Summary (148.5mm x 210mm) -->
+      const itemsPerPage = 38; // 19 items on left + 19 items on right
+      const totalPages = Math.max(1, Math.ceil(sortedSummaries.length / itemsPerPage));
+      let pagesHtml = '';
+
+      for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+        const pageSummaries = sortedSummaries.slice(pageIdx * itemsPerPage, (pageIdx + 1) * itemsPerPage);
+        const leftSummaries = pageSummaries.slice(0, 19);
+        const rightSummaries = pageSummaries.slice(19, 38);
+
+        const leftStartIdx = pageIdx * itemsPerPage + 1;
+        const rightStartIdx = pageIdx * itemsPerPage + 20;
+
+        const leftRowsHtml = buildA5TableRows(leftSummaries, leftStartIdx);
+        const rightRowsHtml = rightSummaries.length > 0 ? buildA5TableRows(rightSummaries, rightStartIdx) : '';
+
+        const pageLabel = totalPages > 1 ? ` (${pageIdx + 1}/${totalPages})` : '';
+
+        // Left Column Box
+        const leftBoxHtml = `
           <div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box; display: flex; flex-direction: column;">
             <div style="border: 2px solid #000; padding: 10px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column;">
-              
               <!-- Header -->
               <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 6px;">
                 <div>
-                  <h2 style="font-size: 15px; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
-                    品項細目出貨彙整表 (A5) ${tagText}
+                  <h2 style="font-size: 15pt; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
+                    黑柳徹出貨彙整表${pageLabel}
                   </h2>
-                  <span style="font-size: 9px; color: #333;">列印時間：${timeStr}</span>
+                  <div style="font-size: 9pt; color: #333; margin-top: 2px;">
+                    <span>列印時間：${timeStr}</span>${tagText}
+                  </div>
                 </div>
-                <div style="text-align: right; font-size: 10px; line-height: 1.2;">
-                  <div>款式種類: <strong style="font-size: 11px;">${sortedSummaries.length}</strong> 款</div>
-                  <div>商品總件數: <strong style="font-size: 11px;">${totalItemsQty}</strong> 件</div>
+                <div style="text-align: right; font-size: 10pt; line-height: 1.2;">
+                  <div>款式: <strong style="font-size: 11pt;">${sortedSummaries.length}</strong> 款</div>
+                  <div>總件數: <strong style="font-size: 11pt;">${totalItemsQty}</strong> 件</div>
                 </div>
               </div>
 
               <!-- Table -->
               <div style="flex-grow: 1; overflow: hidden;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #000;">
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
                   <thead>
                     <tr style="background-color: #e2e8f0; border-bottom: 1px solid #000;">
-                      <th style="padding: 3px 5px; width: 26px; text-align: center; border-right: 1px solid #000;">#</th>
-                      <th style="padding: 3px 5px; text-align: left; border-right: 1px solid #000;">對應細目名稱 (Google Sheet G列)</th>
-                      <th style="padding: 3px 5px; width: 55px; text-align: center;">總數量</th>
+                      <th style="padding: 4px 6px; width: 28px; text-align: center; border-right: 1px solid #000; font-size: 10pt;">#</th>
+                      <th style="padding: 4px 6px; text-align: left; border-right: 1px solid #000; font-size: 10pt;">對應細目名稱 (Google Sheet G列)</th>
+                      <th style="padding: 4px 6px; width: 60px; text-align: center; font-size: 10pt;">總數量</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${rowsHtml}
+                    ${leftRowsHtml}
                   </tbody>
                 </table>
               </div>
             </div>
           </div>
+        `;
 
-          <!-- Center Vertical Cut Line -->
-          <div style="position: absolute; left: 148.5mm; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #666; pointer-events: none; z-index: 20;"></div>
+        // Right Column Box
+        let rightBoxHtml = '';
+        if (rightSummaries.length > 0) {
+          rightBoxHtml = `
+            <div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box; display: flex; flex-direction: column;">
+              <div style="border: 2px solid #000; padding: 10px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column;">
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 6px;">
+                  <div>
+                    <h2 style="font-size: 15pt; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
+                      黑柳徹出貨彙整表 (續)
+                    </h2>
+                    <div style="font-size: 9pt; color: #333; margin-top: 2px;">
+                      <span>列印時間：${timeStr}</span>
+                    </div>
+                  </div>
+                  <div style="text-align: right; font-size: 10pt; line-height: 1.2;">
+                    <div>款式: <strong style="font-size: 11pt;">${sortedSummaries.length}</strong> 款</div>
+                    <div>總件數: <strong style="font-size: 11pt;">${totalItemsQty}</strong> 件</div>
+                  </div>
+                </div>
 
-          <!-- Right Half: Empty space for clean cutting -->
-          <div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box;"></div>
-        </div>
-      `;
+                <!-- Table -->
+                <div style="flex-grow: 1; overflow: hidden;">
+                  <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                    <thead>
+                      <tr style="background-color: #e2e8f0; border-bottom: 1px solid #000;">
+                        <th style="padding: 4px 6px; width: 28px; text-align: center; border-right: 1px solid #000; font-size: 10pt;">#</th>
+                        <th style="padding: 4px 6px; text-align: left; border-right: 1px solid #000; font-size: 10pt;">對應細目名稱 (Google Sheet G列)</th>
+                        <th style="padding: 4px 6px; width: 60px; text-align: center; font-size: 10pt;">總數量</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rightRowsHtml}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          rightBoxHtml = `<div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box;"></div>`;
+        }
+
+        pagesHtml += `
+          <div style="display: flex; width: 297mm; height: 210mm; position: relative; box-sizing: border-box; background: #fff; font-family: 'Noto Sans TC', sans-serif; ${pageIdx < totalPages - 1 ? 'page-break-after: always; break-after: page;' : ''}">
+            ${leftBoxHtml}
+            <div style="position: absolute; left: 148.5mm; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #666; pointer-events: none; z-index: 20;"></div>
+            ${rightBoxHtml}
+          </div>
+        `;
+      }
+
+      container.innerHTML = pagesHtml;
+    }
+
+    function buildA5TableRows(summaries, startIdx) {
+      let html = '';
+      summaries.forEach(([detailName, data], index) => {
+        const idx = startIdx + index;
+        const isUnmapped = detailName === '無型號品項' || detailName.includes('未對應細目') || !data.isMapped;
+        const orderIdsStr = Array.from(data.orderIds || []).map(o => escapeHtml(o)).join(', ');
+
+        let detailDisplay = escapeHtml(detailName);
+        if (isUnmapped && data.orderIds && data.orderIds.size > 0) {
+          detailDisplay += ` <span style="font-weight: normal; font-size: 10pt; color: #dc2626;">(訂單: ${orderIdsStr})</span>`;
+        }
+
+        const fontStyle = isUnmapped ? 'color: #dc2626; font-weight: bold;' : 'font-weight: bold;';
+
+        html += `
+          <tr style="border-bottom: 1px solid #000;">
+            <td style="padding: 2px 4px; text-align: center; border-right: 1px solid #000; font-family: monospace; font-size: 10.5pt;">${idx}</td>
+            <td style="padding: 2px 4px; ${fontStyle} border-right: 1px solid #000; font-size: 12pt; line-height: 1.25;">${detailDisplay}</td>
+            <td style="padding: 2px 4px; text-align: center; font-weight: bold; font-size: 12.5pt; font-family: monospace;">${data.totalQty}</td>
+          </tr>
+        `;
+      });
+      return html;
     }
 
     function escapeHtml(str) {
