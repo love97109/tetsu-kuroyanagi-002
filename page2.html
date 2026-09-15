@@ -87,14 +87,9 @@
       body.printing-a5 .a5-print-container {
         display: block !important;
         width: 297mm !important;
-        height: 210mm !important;
-        max-width: 297mm !important;
-        padding: 0 !important;
-        margin: 0 !important;
         box-sizing: border-box !important;
         font-family: 'Noto Sans TC', sans-serif !important;
         background: #fff !important;
-        overflow: hidden !important;
       }
 
       .print-card {
@@ -146,6 +141,12 @@
       box-sizing: border-box;
       background: #fff;
       font-family: 'Noto Sans TC', sans-serif;
+      page-break-after: always;
+      break-after: page;
+    }
+    .a5-page-wrapper:last-child {
+      page-break-after: avoid;
+      break-after: avoid;
     }
     .a5-box-half {
       width: 148.5mm;
@@ -630,7 +631,7 @@
       reader.readAsArrayBuffer(file);
     }
 
-    /* ===== 🚀 透過 Apps Script Web App API 讀取 JSON (支援 100% 中文與跨網域) ===== */
+    /* ===== 🚀 透過 Apps Script Web App API 讀取 JSON ===== */
     function fetchGoogleSheetMapping() {
       updateSyncUI('loading', '同步線上對應表中...');
 
@@ -1283,6 +1284,7 @@
       }, 1000);
     }
 
+    /* ===== 🚀 修復：動態多頁 A5 排版與自動新增第二頁機制 ===== */
     function renderA5PrintView() {
       const container = document.getElementById('a5-print-view');
       if (!container) return;
@@ -1340,7 +1342,7 @@
       if (excludeNoModel) tags.push('已排除無型號品項');
       const tagText = tags.length > 0 ? `<span style="font-size: 8.5pt; font-weight: normal; color: #555; margin-left: 6px;">[${tags.join(' / ')}]</span>` : '';
 
-      const itemsPerPage = 38;
+      const itemsPerPage = 38; // 每張 A4（左右兩欄各 19 筆）最大容量
       const totalPages = Math.max(1, Math.ceil(sortedSummaries.length / itemsPerPage));
       let pagesHtml = '';
 
@@ -1401,7 +1403,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 6px;">
                   <div>
                     <h2 style="font-size: 15pt; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
-                      黑柳徹出貨彙整表 (續)
+                      黑柳徹出貨彙整表 (續)${pageLabel}
                     </h2>
                     <div style="font-size: 9pt; color: #333; margin-top: 2px;">
                       <span>列印時間：${timeStr}</span>
@@ -1431,11 +1433,12 @@
             </div>
           `;
         } else {
+          // 如果右側沒有表格，放置統計資料
           rightBoxHtml = buildA5StatsBoxHtml(liningCounts, boxCounts, timeStr);
         }
 
         pagesHtml += `
-          <div class="a5-page-wrapper" style="${pageIdx < totalPages - 1 ? 'page-break-after: always; break-after: page;' : ''}">
+          <div class="a5-page-wrapper">
             ${leftBoxHtml}
             <div style="position: absolute; left: 148.5mm; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #666; pointer-events: none; z-index: 20;"></div>
             ${rightBoxHtml}
@@ -1443,10 +1446,11 @@
         `;
       }
 
-      const lastPageSummariesCount = sortedSummaries.length % itemsPerPage;
-      if (sortedSummaries.length > 0 && (lastPageSummariesCount > 19 || lastPageSummariesCount === 0)) {
+      // 檢查最後一頁的右側是否剛好被品項塞滿，如果是的話，另外獨立新增一頁放「統計資料」
+      const lastPageCount = sortedSummaries.length % itemsPerPage;
+      if (sortedSummaries.length > 0 && (lastPageCount > 19 || lastPageCount === 0)) {
         pagesHtml += `
-          <div class="a5-page-wrapper" style="page-break-before: always; break-before: page;">
+          <div class="a5-page-wrapper">
             ${buildA5StatsBoxHtml(liningCounts, boxCounts, timeStr)}
             <div style="position: absolute; left: 148.5mm; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #666; pointer-events: none; z-index: 20;"></div>
             <div class="a5-box-half"></div>
