@@ -337,13 +337,13 @@
 
           <div class="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4">
             <div class="flex items-center gap-2">
-              <input type="checkbox" id="exclude-tk-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer" checked>
+              <input type="checkbox" id="exclude-tk-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer">
               <label for="exclude-tk-checkbox" class="text-xs font-semibold text-slate-700 cursor-pointer select-none">
                 列印時排除配件 (型號開頭為 TK)
               </label>
             </div>
             <div class="flex items-center gap-2">
-              <input type="checkbox" id="exclude-nomodel-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer" checked>
+              <input type="checkbox" id="exclude-nomodel-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer">
               <label for="exclude-nomodel-checkbox" class="text-xs font-semibold text-slate-700 cursor-pointer select-none">
                 列印時排除無型號品項
               </label>
@@ -511,7 +511,7 @@
       return false;
     };
 
-    /* ===== 🔧 已填入您部署的 Apps Script Web App 網址 ===== */
+    /* ===== 🔧 Apps Script Web App 網址 ===== */
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxfzN0P4Up9gS9CmNW9lwylnQzJ7usU4WCCzcJW-UajCeUbUyOZm5aFR1sp3NVrVTCl/exec';
 
     let modelToDetailMap = new Map();
@@ -854,7 +854,7 @@
       const colIdx = {
         orderId: 0,
         model: 20,
-        qty: -1,
+        qty: 16,
         name: 34,
         detailAddr: 35,
         district: 39,
@@ -874,10 +874,11 @@
           val.includes('購買數量') || 
           val.includes('商品數量') || 
           val.includes('單品數量') ||
-          valUpper === 'QTY' || 
-          valUpper === 'QUANTITY'
+          valUpper.includes('QUANTITY') ||
+          valUpper.includes('LINEITEM QUANTITY') ||
+          valUpper === 'QTY'
         ) {
-          if (!/金額|單價|小計|總價|價格|價錢|金額|費用/i.test(val)) {
+          if (!/金額|單價|小計|總價|價格|價錢|費用/i.test(val)) {
             colIdx.qty = idx;
           }
         }
@@ -886,7 +887,7 @@
           colIdx.orderId = idx;
         }
 
-        if (val === '型號' || val.includes('商品型號') || val.includes('主型號') || valUpper === 'SKU' || val.includes('款式型號')) {
+        if (val === '型號' || val.includes('商品型號') || val.includes('主型號') || valUpper === 'SKU' || val.includes('款式型號') || valUpper.includes('LINEITEM SKU')) {
           colIdx.model = idx;
         }
 
@@ -950,23 +951,11 @@
           if (!isNaN(parsedQty) && parsedQty > 0) {
             qty = parsedQty;
           }
-        } else {
-          for (let c = 0; c < row.length; c++) {
-            if (c === colIdx.orderId || c === colIdx.model || c === colIdx.name || c === colIdx.detailAddr) continue;
-
-            const headerName = String(headerRow[c] || '').trim();
-            const isPriceOrAmount = /金額|單價|小計|總價|價格|價錢|price|amount|subtotal|total|fee|運費|編號|id|zip|郵遞|電話|phone/i.test(headerName);
-
-            if (!isPriceOrAmount && row[c] !== undefined && row[c] !== '') {
-              const val = parseInt(row[c], 10);
-              if (!isNaN(val) && val > 0 && val < 200) {
-                if (headerName.includes('數') || headerName.toLowerCase().includes('qty')) {
-                  qty = val;
-                  colIdx.qty = c;
-                  break;
-                }
-              }
-            }
+        } 
+        else if (row[16] !== undefined && row[16] !== '') {
+          const parsedQ = parseInt(row[16], 10);
+          if (!isNaN(parsedQ) && parsedQ > 0) {
+            qty = parsedQ;
           }
         }
 
@@ -1284,7 +1273,6 @@
       }, 1000);
     }
 
-    /* ===== 🚀 修復：動態多頁 A5 排版與自動新增第二頁機制 ===== */
     function renderA5PrintView() {
       const container = document.getElementById('a5-print-view');
       if (!container) return;
@@ -1342,7 +1330,7 @@
       if (excludeNoModel) tags.push('已排除無型號品項');
       const tagText = tags.length > 0 ? `<span style="font-size: 8.5pt; font-weight: normal; color: #555; margin-left: 6px;">[${tags.join(' / ')}]</span>` : '';
 
-      const itemsPerPage = 38; // 每張 A4（左右兩欄各 19 筆）最大容量
+      const itemsPerPage = 38;
       const totalPages = Math.max(1, Math.ceil(sortedSummaries.length / itemsPerPage));
       let pagesHtml = '';
 
@@ -1433,7 +1421,6 @@
             </div>
           `;
         } else {
-          // 如果右側沒有表格，放置統計資料
           rightBoxHtml = buildA5StatsBoxHtml(liningCounts, boxCounts, timeStr);
         }
 
@@ -1446,7 +1433,6 @@
         `;
       }
 
-      // 檢查最後一頁的右側是否剛好被品項塞滿，如果是的話，另外獨立新增一頁放「統計資料」
       const lastPageCount = sortedSummaries.length % itemsPerPage;
       if (sortedSummaries.length > 0 && (lastPageCount > 19 || lastPageCount === 0)) {
         pagesHtml += `
