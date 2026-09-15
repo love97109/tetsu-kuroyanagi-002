@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>黑柳徹Shopify訂單彙整工具</title>
+  <title>黑柳徹 Shopify 訂單彙整工具</title>
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -18,13 +18,12 @@
 
   <style>
     body {
-      font-family: 'Noto Sans TC', sans-serif;
+      font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     .font-mono {
       font-family: 'JetBrains Mono', monospace;
     }
 
-    /* Fallback SVG sizing rules to prevent unstyled layout explosion */
     svg {
       display: inline-block !important;
       vertical-align: middle;
@@ -35,8 +34,13 @@
     .jp-card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
-      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
       border-radius: 0.75rem;
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    
+    .jp-card:hover {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
     }
 
     /* Media Print Optimization Rules */
@@ -66,12 +70,10 @@
         border: none !important;
       }
 
-      /* Standard Full Print Mode */
       body:not(.printing-a5) .a5-print-container {
         display: none !important;
       }
 
-      /* A5 Dedicated Print Mode */
       body.printing-a5 .print-container,
       body.printing-a5 header,
       body.printing-a5 footer,
@@ -134,34 +136,73 @@
         display: none !important;
       }
     }
+
+    /* Custom A5 dynamic printing helper styles */
+    .a5-page-wrapper {
+      display: flex;
+      width: 297mm;
+      height: 210mm;
+      position: relative;
+      box-sizing: border-box;
+      background: #fff;
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+    .a5-box-half {
+      width: 148.5mm;
+      height: 210mm;
+      padding: 8mm 10mm;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+    .a5-box-inner {
+      border: 2px solid #000;
+      padding: 10px;
+      height: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+    .a5-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #000;
+    }
+    .a5-table th {
+      background-color: #e2e8f0;
+      border-bottom: 1px solid #000;
+      padding: 4px 6px;
+      font-size: 10pt;
+    }
+    .a5-table td {
+      border-bottom: 1px solid #000;
+      padding: 2px 4px;
+    }
   </style>
 </head>
-<body class="min-h-full flex flex-col text-slate-800 bg-slate-50">
+<body class="min-h-full flex flex-col text-slate-800 bg-slate-50 antialiased">
 
-  <!-- Toast Notification Container -->
-  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
+  <!-- Toast Container -->
+  <div id="toast-container" aria-live="polite" aria-atomic="true" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
 
-  <!-- Manual Mapping Modal (Fallback when CORS or offline) -->
-  <div id="mapping-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+  <!-- Manual Mapping Modal -->
+  <div id="mapping-modal" role="dialog" aria-modal="true" aria-labelledby="mapping-modal-title" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+        <h3 id="mapping-modal-title" class="font-bold text-slate-900 text-base flex items-center gap-2">
           <svg width="20" height="20" class="w-5 h-5 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
           </svg>
           對應表設定 (手動備援模式)
         </h3>
-        <button onclick="closeMappingModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+        <button onclick="closeMappingModal()" aria-label="關閉視窗" class="text-slate-400 hover:text-slate-600 focus:outline-none rounded-lg p-1 font-bold text-lg">&times;</button>
       </div>
-
       <p class="text-xs text-slate-600 leading-relaxed">
         如自動連線 Google 試算表失敗，您可以透過上傳檔案進行手動設定：
       </p>
-
       <div class="space-y-4">
-        <!-- Option A: Upload Mapping File -->
-        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
-          <span class="text-xs font-bold text-slate-800 block">選項 A：上傳對應表檔 (.xlsx / .csv)</span>
+        <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+          <span class="text-xs font-bold text-slate-800 block">上傳對應表檔 (.xlsx / .csv)</span>
           <p class="text-[11px] text-slate-500">上傳含有「型號」與「細目」欄位的 Excel / CSV 對應表檔。</p>
           <input type="file" id="mapping-file-input" accept=".xlsx, .xls, .csv" onchange="handleMappingFileUpload(event)" class="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-800 hover:file:bg-slate-300 cursor-pointer">
         </div>
@@ -169,90 +210,67 @@
     </div>
   </div>
 
-  <!-- Gemini AI Address Validation Modal -->
-  <div id="gemini-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+  <!-- Gemini AI Address Modal -->
+  <div id="gemini-modal" role="dialog" aria-modal="true" aria-labelledby="gemini-modal-title" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full p-6 space-y-5 border border-slate-200">
-      
-      <!-- Modal Header -->
       <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+        <h3 id="gemini-modal-title" class="font-bold text-slate-900 text-base flex items-center gap-2">
           <svg width="20" height="20" class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
           </svg>
           AI 地址智慧校對 & 驗證 (Gemini)
         </h3>
-        <button onclick="closeGeminiAddressModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+        <button onclick="closeGeminiAddressModal()" aria-label="關閉視窗" class="text-slate-400 hover:text-slate-600 focus:outline-none rounded-lg p-1 font-bold text-lg">&times;</button>
       </div>
 
-      <!-- Description Banner -->
       <div class="bg-indigo-50/80 border border-indigo-100 rounded-lg p-3.5 text-xs text-indigo-900 space-y-1">
-        <p class="font-bold flex items-center gap-1.5">
-          <span>💡</span> Gemini 智慧地址校對說明：
-        </p>
+        <p class="font-bold flex items-center gap-1.5">💡 Gemini 智慧地址校對說明：</p>
         <p class="leading-relaxed text-indigo-800">
-          透過 AI 檢查訂單地址是否有「缺漏縣市/鄉鎮區」、「郵遞區號錯誤」或「門牌不完整」等問題，維護物流高送達率。
+          透過 AI 檢查訂單地址是否有缺漏縣市/鄉鎮區、郵遞區號錯誤或門牌不完整等問題。
         </p>
       </div>
 
-      <!-- Step-by-Step Instructions -->
       <div class="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-        <p class="font-bold text-slate-800 text-xs tracking-wider uppercase">📋 簡易操作 3 步驟：</p>
-        
+        <p class="font-bold text-slate-800 text-xs uppercase">📋 簡易操作 3 步驟：</p>
         <ol class="space-y-2 text-slate-600 list-decimal pl-4">
-          <li class="leading-relaxed">
-            <strong class="text-slate-800">點擊下方按鈕</strong>：系統將自動下載 <code class="bg-slate-200 px-1 py-0.5 rounded text-[11px] font-mono text-slate-800">待校對地址清單.xlsx</code>，並將專用提示詞自動複製至剪貼簿。
-          </li>
-          <li class="leading-relaxed">
-            <strong class="text-slate-800">上傳 Excel 檔案</strong>：畫面自動開啓 Gemini 網站，點擊 Gemini 對話框左側的 <span class="font-bold text-indigo-700">+ (加號)</span> 圖示，選擇剛剛下載的 Excel 檔。
-          </li>
-          <li class="leading-relaxed">
-            <strong class="text-slate-800">貼上指令並送出</strong>：在 Gemini 輸入框按 <kbd class="px-1.5 py-0.5 bg-white border border-slate-300 rounded shadow-xs font-mono text-[10px]">Ctrl + V</kbd> 貼上指令，點擊送出即可獲得完整校對報告！
-          </li>
+          <li class="leading-relaxed">點擊下方按鈕：下載 <code class="bg-slate-200 px-1 rounded font-mono">待校對地址清單.xlsx</code> 並複製提示詞。</li>
+          <li class="leading-relaxed">開啟 Gemini 網頁並點擊 <span class="font-bold text-indigo-700">+</span> 上傳檔案。</li>
+          <li class="leading-relaxed">按 <kbd class="px-1 bg-white border rounded font-mono">Ctrl + V</kbd> 貼上指令送出分析。</li>
         </ol>
       </div>
 
-      <!-- Main Action Button -->
-      <div>
-        <button onclick="exportAddressCheckAndOpenGemini()" class="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md transition-all flex flex-col items-center justify-center gap-1 border border-indigo-700">
-          <span class="flex items-center gap-2 text-base">
-            🚀 匯出 Excel 並跳轉 Gemini 網頁
-          </span>
-          <span class="text-[11px] font-normal text-indigo-200">
-            自動複製 Prompt 指令 ➔ 下載檢核檔 ➔ 開啟 Gemini 網頁
-          </span>
-        </button>
-      </div>
-
+      <button onclick="exportAddressCheckAndOpenGemini()" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all flex flex-col items-center justify-center gap-1">
+        <span class="flex items-center gap-2 text-base">🚀 匯出 Excel 並跳轉 Gemini 網頁</span>
+        <span class="text-[11px] font-normal text-indigo-200">自動複製 Prompt 指令 ➔ 下載檢核檔 ➔ 開啟 Gemini 網頁</span>
+      </button>
     </div>
   </div>
 
-  <!-- Top Navigation Header -->
   <header class="no-print bg-slate-900 text-white shadow-md border-b border-slate-800">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
       <div class="flex items-center space-x-3">
-        <div class="w-9 h-9 bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-center font-bold text-white text-lg shadow-inner">
+        <div class="w-9 h-9 bg-indigo-600 border border-indigo-500 rounded-lg flex items-center justify-center font-bold text-white text-lg shadow-inner">
           單
         </div>
         <div>
-          <h1 class="font-bold text-base tracking-wide text-slate-100">黑柳徹Shopify訂單彙整工具</h1>
-          <p class="text-[11px] text-slate-400">自動跨檔比對品項細目 ➔ 生成極速核對與列印報告</p>
+          <h1 class="font-bold text-base tracking-wide text-slate-100">黑柳徹 Shopify 訂單彙整工具</h1>
+          <p class="text-[11px] text-slate-400 hidden sm:block">自動跨檔比對品項細目 ➔ 生成極速核對與列印報告</p>
         </div>
       </div>
 
-      <!-- Google Sheet Connection Status Badge -->
-      <div class="flex items-center gap-3">
-        <button onclick="openMappingModal()" id="status-badge" class="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-800 text-xs px-3 py-1.5 rounded-full border border-slate-700 transition-colors">
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button onclick="openMappingModal()" id="status-badge" class="flex items-center gap-2 bg-slate-800/90 hover:bg-slate-800 text-xs px-3 py-1.5 rounded-full border border-slate-700">
           <span id="status-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
           <span id="status-text" class="text-slate-300 font-medium">連線 Google 試算表中...</span>
         </button>
 
-        <button onclick="fetchGoogleSheetMapping()" title="重新同步對應表" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">
+        <button onclick="fetchGoogleSheetMapping()" title="重新同步對應表" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700">
           <svg width="16" height="16" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
           </svg>
         </button>
 
-        <button onclick="openMappingModal()" title="設定對應表" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">
+        <button onclick="openMappingModal()" title="設定對應表" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700">
           <svg width="16" height="16" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -262,33 +280,32 @@
     </div>
   </header>
 
-  <!-- MAIN CONTENT CONTAINER -->
   <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-    <!-- Upload & Quick Action Section (3 Column Grid) -->
+    <!-- Upload & Action Cards Section -->
     <section class="no-print grid grid-cols-1 lg:grid-cols-3 gap-6">
       
-      <!-- 1. Drag & Drop File Upload Box -->
+      <!-- 1. File Upload Box -->
       <div class="jp-card p-6 flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <svg width="16" height="16" class="w-4 h-4 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg width="16" height="16" class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
               </svg>
-              上傳 Excel / Shopify CSV 訂單檔案
+              上傳 Excel / CSV 訂單檔案
             </h2>
-            <span class="text-xs text-slate-400 font-mono">預設讀取單號與 U 列型號</span>
+            <span class="text-xs text-slate-400 font-mono">自動對應欄位</span>
           </div>
 
-          <label class="border-2 border-dashed border-slate-300 hover:border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50/50 hover:bg-slate-100/50">
+          <label class="border-2 border-dashed border-slate-300 hover:border-indigo-600 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all bg-slate-50/50 hover:bg-indigo-50/30 group">
             <input type="file" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleFileUpload(event)">
-            <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center mb-3">
+            <div class="w-12 h-12 rounded-full bg-slate-100 group-hover:bg-indigo-100 text-slate-600 group-hover:text-indigo-600 flex items-center justify-center mb-3 transition-colors">
               <svg width="24" height="24" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
               </svg>
             </div>
-            <p id="upload-label" class="text-xs font-semibold text-slate-700 text-center mb-1">
+            <p id="upload-label" class="text-xs font-semibold text-slate-700 text-center mb-1 group-hover:text-indigo-700">
               拖曳 Excel / CSV 檔案至此，或點擊選擇檔案
             </p>
             <p class="text-[11px] text-slate-400 text-center">支援由 Shopify / 蝦皮匯出之 orders_export 試算表及 CSV 檔</p>
@@ -296,16 +313,16 @@
         </div>
 
         <div id="file-info-bar" class="hidden mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs text-emerald-800">
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span id="file-name-text" class="font-bold">orders.xlsx</span>
+          <div class="flex items-center gap-2 truncate">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            <span id="file-name-text" class="font-bold truncate">orders.xlsx</span>
           </div>
-          <span id="file-stats-text" class="font-mono text-[11px] text-emerald-600">已載入</span>
+          <span id="file-stats-text" class="font-mono text-[11px] text-emerald-600 shrink-0 ml-2">已載入</span>
         </div>
       </div>
 
-      <!-- 2. Quick Action Panel: A5 Print -->
-      <div class="jp-card p-6 flex flex-col justify-between bg-white border border-slate-200 rounded-xl shadow-sm">
+      <!-- 2. A5 Print Card -->
+      <div class="jp-card p-6 flex flex-col justify-between">
         <div>
           <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
             <svg width="16" height="16" class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,11 +331,10 @@
             A5 出貨彙整模組
           </h2>
           <p class="text-xs text-slate-500 leading-relaxed mb-3">
-            解析訂單後，可快速產生 A5 尺寸品項對裁清單供現場人員包貨。
+            解析訂單後，可快速產生 A5 尺寸品項對裁清單，末頁自動加附內襯與包裝盒統計。
           </p>
 
-          <!-- Options -->
-          <div class="space-y-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 mb-4">
+          <div class="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4">
             <div class="flex items-center gap-2">
               <input type="checkbox" id="exclude-tk-checkbox" class="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-700 cursor-pointer" checked>
               <label for="exclude-tk-checkbox" class="text-xs font-semibold text-slate-700 cursor-pointer select-none">
@@ -342,17 +358,17 @@
         </button>
       </div>
 
-      <!-- 3. Hsinchu Logistics Export Module -->
-      <div class="jp-card p-6 flex flex-col justify-between bg-white border border-slate-200 rounded-xl shadow-sm">
+      <!-- 3. Hsinchu Export & AI Modal Card -->
+      <div class="jp-card p-6 flex flex-col justify-between">
         <div>
           <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-            <svg width="16" height="16" class="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width="16" height="16" class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2m-4-1v8m0 0l3-3m-3 3L9 8m-5 5h2.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293h3.172a1 1 0 00.707-.293l2.414-2.414a1 1 0 01.707-.293H20"></path>
             </svg>
             新竹物流託運單匯出
           </h2>
           <p class="text-xs text-slate-500 leading-relaxed mb-3">
-            將解析後的收件人姓名、電話與地址轉換為新竹物流託運系統專用的標準 Excel 匯入格式。
+            轉換收件人資訊為新竹物流託運單標準 12 欄位格式。
           </p>
 
           <div class="mb-4 p-2.5 bg-emerald-50/60 border border-emerald-200/80 rounded-lg text-xs text-emerald-800 space-y-1">
@@ -360,25 +376,22 @@
               <svg width="14" height="14" class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
               </svg>
-              自動合併地址 (AO + AN + AJ)
+              自動合併地址與格式化電話
             </div>
-            <p class="text-[11px] text-emerald-700 leading-tight">
-              匯出檔案符合 12 欄位標準，包含預設才積、數量與格式對應。
-            </p>
+            <p class="text-[11px] text-emerald-700 leading-tight">符合物流中心直接匯入規範。</p>
           </div>
         </div>
 
         <div class="space-y-2.5">
-          <button onclick="exportHsinchuLogisticsExcel()" class="w-full py-3 px-4 bg-emerald-800 hover:bg-emerald-900 active:bg-emerald-950 text-white font-bold text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 border border-emerald-900">
-            <svg width="16" height="16" class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button onclick="exportHsinchuLogisticsExcel()" class="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2">
+            <svg width="16" height="16" class="w-4 h-4 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             匯出新竹物流 Excel 檔
           </button>
 
-          <!-- Gemini Address AI Validation -->
-          <button onclick="openGeminiAddressModal()" class="w-full py-2.5 px-4 bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white font-bold text-xs rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 border border-indigo-800">
-            <svg width="16" height="16" class="w-4 h-4 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button onclick="openGeminiAddressModal()" class="w-full py-2.5 px-4 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-lg shadow-sm transition-all flex items-center justify-center gap-2">
+            <svg width="16" height="16" class="w-4 h-4 text-indigo-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
             </svg>
             AI 地址智慧校對 & 驗證 (Gemini)
@@ -388,44 +401,42 @@
 
     </section>
 
-    <!-- Empty State Prompt -->
-    <div id="empty-state" class="jp-card p-12 text-center my-8 bg-white border border-slate-200 rounded-xl shadow-sm">
+    <section id="empty-state" class="jp-card p-12 text-center my-8 bg-white border border-slate-200 rounded-xl shadow-sm">
       <div class="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
         <svg width="32" height="32" class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
         </svg>
       </div>
       <h3 class="text-base font-semibold text-slate-700 mb-1">尚未載入訂單資料</h3>
-      <p class="text-xs text-slate-400 max-w-md mx-auto">請先在上方上傳 Excel / CSV 訂單檔案，系統將會自動對應 Google Sheet 資料並生成分析報告。</p>
-    </div>
+      <p class="text-xs text-slate-400 max-w-md mx-auto">請先在上方上傳 Excel / CSV 訂單檔案，系統將會自動對應 Google 試算表資料並生成分析報告。</p>
+    </section>
 
-    <!-- REPORT CONTENT (Rendered dynamically) -->
     <div id="report-content" class="hidden space-y-8">
 
       <!-- Action Bar & Summary Bar -->
-      <div class="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div class="flex items-center space-x-6 text-xs text-slate-600">
+      <aside aria-label="數據統計列" class="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <dl class="flex items-center space-x-6 text-xs text-slate-600">
           <div>
-            <span class="text-slate-400 block text-[10px]">解析總訂單數</span>
-            <strong id="stat-total-orders" class="text-sm font-bold text-slate-900 font-mono">0 筆</strong>
+            <dt class="text-slate-400 text-[10px]">解析總訂單數</dt>
+            <dd id="stat-total-orders" class="text-sm font-bold text-slate-900 font-mono">0 筆</dd>
           </div>
           <div class="border-l border-slate-200 pl-6">
-            <span class="text-slate-400 block text-[10px]">商品列總數</span>
-            <strong id="stat-total-rows" class="text-sm font-bold text-slate-900 font-mono">0 列</strong>
+            <dt class="text-slate-400 text-[10px]">商品列總數</dt>
+            <dd id="stat-total-rows" class="text-sm font-bold text-slate-900 font-mono">0 列</dd>
           </div>
           <div class="border-l border-slate-200 pl-6">
-            <span class="text-slate-400 block text-[10px]">統計不重複細目</span>
-            <strong id="stat-unique-details" class="text-sm font-bold text-slate-900 font-mono">0 款</strong>
+            <dt class="text-slate-400 text-[10px]">統計不重複細目</dt>
+            <dd id="stat-unique-details" class="text-sm font-bold text-slate-900 font-mono">0 款</dd>
           </div>
-        </div>
-      </div>
+        </dl>
+      </aside>
 
-      <!-- Report Print Header (Visible during full A4 print) -->
+      <!-- Print Header for Standard A4 print -->
       <div class="print-only mb-6 border-b-2 border-black pb-4">
         <h1 class="text-2xl font-bold text-black tracking-tight">訂單彙整與出貨明細報告</h1>
         <div class="flex justify-between items-center text-xs text-black mt-2">
           <span id="report-timestamp">產生時間：-</span>
-          <span>資料對應來源：Google Sheet (GID: 1182638674)</span>
+          <span>資料對應來源：Google 試算表 (GAS API)</span>
         </div>
       </div>
 
@@ -439,26 +450,32 @@
           <span class="text-xs text-slate-500 print:text-black font-mono">依 Google 試算表列順序排列</span>
         </div>
 
-        <!-- Logic A Table -->
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
           <table class="w-full text-left border-collapse text-xs print-table">
             <thead>
-              <tr class="bg-slate-100 text-slate-800 font-semibold border-y border-slate-200">
-                <th class="py-2.5 px-3 w-12 text-center">#</th>
-                <th class="py-2.5 px-3">對應細目名稱 (Google Sheet G列)</th>
-                <th class="py-2.5 px-3 text-center w-28">總累計數量</th>
-                <th class="py-2.5 px-3">包含原始型號 (Excel U列)</th>
+              <tr class="bg-slate-100 text-slate-800 font-semibold border-b border-slate-200">
+                <th scope="col" class="py-2.5 px-3 w-12 text-center">#</th>
+                <th scope="col" class="py-2.5 px-3">對應細目名稱 (Google Sheet G列)</th>
+                <th scope="col" class="py-2.5 px-3 text-center w-28">總累計數量</th>
+                <th scope="col" class="py-2.5 px-3 text-center w-28">內襯 (J列)</th>
+                <th scope="col" class="py-2.5 px-3 text-center w-28">包裝盒 (K列)</th>
+                <th scope="col" class="py-2.5 px-3">包含原始型號 (Excel U列)</th>
               </tr>
             </thead>
-            <tbody id="logic-a-tbody" class="divide-y divide-slate-200 text-slate-800">
+            <tbody id="logic-a-tbody" class="divide-y divide-slate-200 text-slate-800 bg-white">
               <!-- Dynamic Rows -->
             </tbody>
           </table>
         </div>
+
+        <!-- Logic A Extra Summary (Screen View) -->
+        <div id="logic-a-extra-summary" class="no-print grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <!-- Rendered dynamically -->
+        </div>
       </section>
 
       <!-- LOGIC B SECTION -->
-      <section class="space-y-4 pt-6">
+      <section class="space-y-4 pt-4">
         <div class="flex items-center justify-between border-b border-slate-200 pb-2">
           <h3 class="text-base font-bold text-slate-900 print:text-black flex items-center gap-2">
             <span class="bg-slate-800 text-white text-xs px-2 py-0.5 rounded print:bg-black">邏輯 B</span>
@@ -467,7 +484,6 @@
           <span class="text-xs text-slate-500 print:text-black font-mono">同一訂單編號併入單卡</span>
         </div>
 
-        <!-- Logic B Grid Cards Container -->
         <div id="logic-b-cards" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Dynamic Order Cards -->
         </div>
@@ -477,17 +493,15 @@
 
   </main>
 
-  <!-- A5 Print View Container (Hidden in web, visible during A5 print) -->
   <div id="a5-print-view" class="a5-print-container">
-    <!-- Rendered dynamically by JS -->
+    <!-- Rendered dynamically for A5 print -->
   </div>
 
   <footer class="no-print bg-slate-100 border-t border-slate-200 py-4 mt-12 text-center text-xs text-slate-500">
-    <p>訂單彙整與細目核對系統 &copy; 2026 | 單一檔案高效極速架構</p>
+    <p>黑柳徹 Shopify 訂單彙整與細目核對系統 &copy; 2026 | 單一檔案極速優化架構</p>
   </footer>
 
   <script>
-    /* Global error boundary to suppress non-critical cross-origin script error noise */
     window.onerror = function(msg) {
       if (typeof msg === 'string' && msg.includes('Script error')) {
         console.warn('Suppressed cross-origin script notice:', msg);
@@ -496,30 +510,44 @@
       return false;
     };
 
-    /* ==========================================================================
-       GLOBAL STATE & CONFIGURATION
-       ========================================================================== */
-    const GOOGLE_SHEET_ID = '1VOjSO8HnomJkcLU1w-qVNo3Adu42_QfOtDffvqsTviI';
-    const GOOGLE_SHEET_GID = '1182638674';
+    /* ===== 🔧 已填入您部署的 Apps Script Web App 網址 ===== */
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxfzN0P4Up9gS9CmNW9lwylnQzJ7usU4WCCzcJW-UajCeUbUyOZm5aFR1sp3NVrVTCl/exec';
 
-    // Map: Normalized Model Name -> Detail Name (細目)
     let modelToDetailMap = new Map();
-    // Map: Detail Name -> Original Google Sheet Row Index (Sequence Order)
     let detailOrderMap = new Map();
+    let detailExtraInfoMap = new Map();
 
     let isMappingLoaded = false;
     let rawExcelRows = [];
     let lastProcessedDetailSummaryMap = new Map();
     let lastProcessedOrdersMap = new Map();
 
-    window.onload = function() {
+    window.addEventListener('DOMContentLoaded', () => {
       fetchGoogleSheetMapping();
       setupDragAndDrop();
-    };
+      setupModalKeyboardEvents();
+    });
 
-    /* ==========================================================================
-       TOAST NOTIFICATIONS & MODAL CONTROLS
-       ========================================================================== */
+    function setupModalKeyboardEvents() {
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeMappingModal();
+          closeGeminiAddressModal();
+        }
+      });
+
+      ['mapping-modal', 'gemini-modal'].forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+              modal.classList.add('hidden');
+            }
+          });
+        }
+      });
+    }
+
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
       if (!container) return;
@@ -532,21 +560,21 @@
         warning: 'bg-amber-800 text-white border-amber-900'
       };
 
-      toast.className = `p-3 rounded-lg shadow-lg border text-xs font-medium transition-all transform translate-y-2 opacity-0 pointer-events-auto flex items-center justify-between ${bgColors[type] || bgColors.info}`;
+      toast.className = `p-3 rounded-lg shadow-lg border text-xs font-medium transition-all duration-200 transform translate-y-2 opacity-0 pointer-events-auto flex items-center justify-between gap-3 ${bgColors[type] || bgColors.info}`;
       toast.innerHTML = `
         <span>${escapeHtml(message)}</span>
-        <button onclick="this.parentElement.remove()" class="ml-3 font-bold hover:opacity-75">&times;</button>
+        <button onclick="this.parentElement.remove()" class="font-bold hover:opacity-75 focus:outline-none text-base leading-none">&times;</button>
       `;
 
       container.appendChild(toast);
 
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         toast.classList.remove('translate-y-2', 'opacity-0');
-      }, 10);
+      });
 
       setTimeout(() => {
         toast.classList.add('opacity-0');
-        setTimeout(() => toast.remove(), 300);
+        setTimeout(() => toast.remove(), 200);
       }, 4000);
     }
 
@@ -602,67 +630,42 @@
       reader.readAsArrayBuffer(file);
     }
 
-    /* ==========================================================================
-       GOOGLE SHEET MAPPING FETCH (JSONP + FETCH + LOCAL STORAGE CACHE FALLBACK)
-       ========================================================================== */
+    /* ===== 🚀 透過 Apps Script Web App API 讀取 JSON (支援 100% 中文與跨網域) ===== */
     function fetchGoogleSheetMapping() {
-      updateSyncUI('loading', '同步對應表中...');
+      updateSyncUI('loading', '同步線上對應表中...');
 
-      let isFinished = false;
-      const timeoutTimer = setTimeout(() => {
-        if (!isFinished) {
-          isFinished = true;
-          tryFallbackCacheOrWarn('連線超時，使用備援');
-        }
-      }, 5000);
+      if (!GAS_API_URL || GAS_API_URL.includes('YOUR_APPS_SCRIPT_ID')) {
+        tryFallbackCacheOrWarn('未設定 GAS API 網址');
+        return;
+      }
 
-      // Method 1: JSONP Callback (Safe for file:// and cross-origin)
-      const callbackName = 'google_sheet_jsonp_cb_' + Date.now();
-      window[callbackName] = function(jsonResponse) {
-        if (isFinished) return;
-        isFinished = true;
-        clearTimeout(timeoutTimer);
-
-        delete window[callbackName];
-        if (scriptElem && scriptElem.parentNode) {
-          scriptElem.parentNode.removeChild(scriptElem);
-        }
-
-        try {
-          const rows = [];
-          if (jsonResponse && jsonResponse.table && jsonResponse.table.rows) {
-            jsonResponse.table.rows.forEach(r => {
-              const rowCells = (r.c || []).map(cell => (cell && cell.v !== null && cell.v !== undefined) ? cell.v : '');
-              rows.push(rowCells);
-            });
-          }
-          if (rows.length > 0) {
+      fetch(GAS_API_URL)
+        .then(response => {
+          if (!response.ok) throw new Error('API 傳回異常狀態');
+          return response.json();
+        })
+        .then(rows => {
+          if (rows && rows.length > 0) {
             processMappingRows(rows);
             isMappingLoaded = true;
-            try { localStorage.setItem('cached_mapping_rows', JSON.stringify(rows)); } catch (e) {}
+            try { 
+              localStorage.setItem('cached_mapping_rows', JSON.stringify(rows)); 
+            } catch (e) {}
+            
             updateSyncUI('success', `對應表就緒 (${modelToDetailMap.size} 型號)`);
             showToast(`Google 試算表同步成功！已載入 ${modelToDetailMap.size} 筆對應`, 'success');
-            if (rawExcelRows.length > 0) processExcelRows(rawExcelRows);
-            return;
+            
+            if (rawExcelRows.length > 0) {
+              processExcelRows(rawExcelRows);
+            }
+          } else {
+            tryFallbackCacheOrWarn('試算表內容空白');
           }
-        } catch (e) {
-          console.warn('JSONP parsing error:', e);
-        }
-        tryFallbackCacheOrWarn('解析資料異常');
-      };
-
-      const gvizUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=responseHandler:${callbackName}&gid=${GOOGLE_SHEET_GID}`;
-      const scriptElem = document.createElement('script');
-      scriptElem.src = gvizUrl;
-      scriptElem.onerror = function() {
-        if (!isFinished) {
-          isFinished = true;
-          clearTimeout(timeoutTimer);
-          delete window[callbackName];
-          tryFallbackCacheOrWarn('連線受阻，使用備援');
-        }
-      };
-      document.head.appendChild(scriptElem);
+        })
+        .catch(err => {
+          console.error('GAS Fetch Error:', err);
+          tryFallbackCacheOrWarn('連線 Google 試算表失敗');
+        });
     }
 
     function tryFallbackCacheOrWarn(msg) {
@@ -705,9 +708,6 @@
       }
     }
 
-    /* ==========================================================================
-       CSV & DATA CLEANING UTILITIES
-       ========================================================================== */
     function normalizeKey(str) {
       if (!str) return '';
       return String(str)
@@ -721,21 +721,31 @@
     function processMappingRows(rows) {
       modelToDetailMap.clear();
       detailOrderMap.clear();
+      detailExtraInfoMap.clear();
 
       if (!rows || rows.length < 1) return;
 
-      let modelColIdx = 4;  // Column E default
-      let detailColIdx = 6; // Column G default
+      let modelColIdx = -1; 
+      let detailColIdx = -1;
+      let liningColIdx = -1; 
+      let boxColIdx = -1;
 
       for (let i = 0; i < Math.min(10, rows.length); i++) {
         const r = rows[i];
         if (!r) continue;
         r.forEach((cell, idx) => {
-          const val = cleanStr(cell);
-          if (val === '型號') modelColIdx = idx;
-          if (val === '細目') detailColIdx = idx;
+          const val = cleanStr(cell).replace(/\s+/g, '');
+          if (val.includes('型號')) modelColIdx = idx;
+          if (val.includes('細目')) detailColIdx = idx;
+          if (val.includes('內襯')) liningColIdx = idx;
+          if (val.includes('包裝盒')) boxColIdx = idx;
         });
       }
+
+      if (modelColIdx === -1) modelColIdx = 4;
+      if (detailColIdx === -1) detailColIdx = 6;
+      if (liningColIdx === -1) liningColIdx = 9;
+      if (boxColIdx === -1) boxColIdx = 10;
 
       let orderSequence = 0;
 
@@ -745,20 +755,28 @@
         const modelVal = cleanStr(row[modelColIdx]);
         const detailVal = cleanStr(row[detailColIdx]);
 
-        if (modelVal && detailVal && modelVal !== '型號') {
+        if (modelVal && detailVal && !modelVal.includes('型號')) {
           const normKey = normalizeKey(modelVal);
           modelToDetailMap.set(normKey, detailVal);
 
           if (!detailOrderMap.has(detailVal)) {
             detailOrderMap.set(detailVal, orderSequence++);
           }
+
+          const liningVal = row[liningColIdx] !== undefined ? cleanStr(row[liningColIdx]) : '';
+          const boxVal = row[boxColIdx] !== undefined ? cleanStr(row[boxColIdx]) : '';
+          
+          if (!detailExtraInfoMap.has(detailVal)) {
+            detailExtraInfoMap.set(detailVal, { lining: liningVal, box: boxVal });
+          } else {
+            const existing = detailExtraInfoMap.get(detailVal);
+            if (!existing.lining && liningVal) existing.lining = liningVal;
+            if (!existing.box && boxVal) existing.box = boxVal;
+          }
         }
       }
     }
 
-    /* ==========================================================================
-       DRAG AND DROP & FILE UPLOAD HANDLERS
-       ========================================================================== */
     function setupDragAndDrop() {
       const dropzone = document.querySelector('.border-dashed');
       if (!dropzone) return;
@@ -771,11 +789,11 @@
       });
 
       ['dragenter', 'dragover'].forEach(eventName => {
-        dropzone.addEventListener(eventName, () => dropzone.classList.add('border-slate-800', 'bg-slate-100/50'), false);
+        dropzone.addEventListener(eventName, () => dropzone.classList.add('border-indigo-600', 'bg-indigo-50/30'), false);
       });
 
       ['dragleave', 'drop'].forEach(eventName => {
-        dropzone.addEventListener(eventName, () => dropzone.classList.remove('border-slate-800', 'bg-slate-100/50'), false);
+        dropzone.addEventListener(eventName, () => dropzone.classList.remove('border-indigo-600', 'bg-indigo-50/30'), false);
       });
 
       dropzone.addEventListener('drop', e => {
@@ -831,19 +849,16 @@
       reader.readAsArrayBuffer(file);
     }
 
-    /* ==========================================================================
-       DYNAMIC COLUMN INDEX DETECTOR
-       ========================================================================== */
     function findColumnIndices(headerRow) {
       const colIdx = {
-        orderId: 0,     // Default Col A
-        model: 20,      // Default Col U
-        qty: -1,        // Dynamic search
-        name: 34,       // Default Col AI
-        detailAddr: 35, // Default Col AJ
-        district: 39,   // Default Col AN
-        zip: 40,        // Default Col AO
-        phone: 43       // Default Col AR
+        orderId: 0,
+        model: 20,
+        qty: -1,
+        name: 34,
+        detailAddr: 35,
+        district: 39,
+        zip: 40,
+        phone: 43
       };
 
       if (!headerRow || !Array.isArray(headerRow)) return colIdx;
@@ -898,9 +913,6 @@
       return colIdx;
     }
 
-    /* ==========================================================================
-       DATA PROCESSING & AGGREGATION
-       ========================================================================== */
     function processExcelRows(rows) {
       if (!rows || rows.length < 2) return;
 
@@ -1017,22 +1029,18 @@
       let str = String(phone).trim().replace(/^['’]+/, '');
       if (!str) return '';
 
-      // 去除國際碼 +886 或 886
       if (str.startsWith('+886')) {
         str = '0' + str.slice(4);
       } else if (str.startsWith('886') && str.length >= 11) {
         str = '0' + str.slice(3);
       }
 
-      // 提取所有數字
       const digits = str.replace(/[^\d]/g, '');
 
-      // 若為 9 碼且以 9 開頭 (如 922346369 -> 0922346369)
       if (/^9\d{8}$/.test(digits)) {
         return '0' + digits;
       }
 
-      // 若不以 0 開頭且以 9 開頭的台灣號碼
       if (!digits.startsWith('0') && digits.startsWith('9')) {
         return '0' + digits;
       }
@@ -1049,9 +1057,6 @@
       return fullAddr.replace(/^['’]+/, '');
     }
 
-    /* ==========================================================================
-       UI REPORT RENDERING FUNCTIONS
-       ========================================================================== */
     function renderReport(ordersMap, detailSummaryMap, totalItemRows) {
       document.getElementById('empty-state').classList.add('hidden');
       document.getElementById('report-content').classList.remove('hidden');
@@ -1077,29 +1082,47 @@
         return detailA.localeCompare(detailB, 'zh-TW');
       });
 
+      const liningCounts = new Map();
+      const boxCounts = new Map();
+
       let idx = 1;
       sortedSummaries.forEach(([detailName, data]) => {
         const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-50 transition-colors';
+        tr.className = 'hover:bg-slate-50/80 transition-colors';
         const modelsStr = Array.from(data.originalModels).map(m => escapeHtml(m)).join(', ');
         const orderIdsStr = Array.from(data.orderIds || []).map(o => escapeHtml(o)).join(', ');
 
         const isUnmapped = detailName === '無型號品項' || detailName.includes('未對應細目') || !data.isMapped;
-        const textColorClass = isUnmapped ? 'text-red-600 font-bold' : 'text-slate-900';
+        const textColorClass = isUnmapped ? 'text-rose-600 font-bold' : 'text-slate-900 font-semibold';
 
         let detailDisplay = escapeHtml(detailName);
         if (isUnmapped && data.orderIds && data.orderIds.size > 0) {
-          detailDisplay += ` <span class="text-xs font-normal text-red-500 font-mono">(訂單: ${orderIdsStr})</span>`;
+          detailDisplay += ` <span class="text-xs font-normal text-rose-500 font-mono">(訂單: ${orderIdsStr})</span>`;
+        }
+
+        const extraInfo = detailExtraInfoMap.get(detailName) || { lining: '-', box: '-' };
+        const liningTxt = extraInfo.lining ? escapeHtml(extraInfo.lining) : '-';
+        const boxTxt = extraInfo.box ? escapeHtml(extraInfo.box) : '-';
+
+        if (extraInfo.lining && extraInfo.lining !== '-') {
+          liningCounts.set(extraInfo.lining, (liningCounts.get(extraInfo.lining) || 0) + data.totalQty);
+        }
+        if (extraInfo.box && extraInfo.box !== '-') {
+          boxCounts.set(extraInfo.box, (boxCounts.get(extraInfo.box) || 0) + data.totalQty);
         }
 
         tr.innerHTML = `
           <td class="py-2.5 px-3 text-center text-slate-400 font-mono">${idx++}</td>
-          <td class="py-2.5 px-3 font-semibold ${textColorClass}">${detailDisplay}</td>
-          <td class="py-2.5 px-3 text-center font-bold text-slate-900 text-sm">${data.totalQty}</td>
+          <td class="py-2.5 px-3 ${textColorClass}">${detailDisplay}</td>
+          <td class="py-2.5 px-3 text-center font-bold text-slate-900 text-sm font-mono">${data.totalQty}</td>
+          <td class="py-2.5 px-3 text-center text-slate-700 font-mono text-xs">${liningTxt}</td>
+          <td class="py-2.5 px-3 text-center text-slate-700 font-mono text-xs">${boxTxt}</td>
           <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px]">${modelsStr || '-'}</td>
         `;
         tbody.appendChild(tr);
       });
+
+      renderScreenExtraSummary(liningCounts, boxCounts);
 
       // Render Logic B Cards
       const cardsContainer = document.getElementById('logic-b-cards');
@@ -1107,7 +1130,7 @@
 
       let cardNum = 1;
       ordersMap.forEach((order) => {
-        const card = document.createElement('div');
+        const card = document.createElement('article');
         
         const hasNoModelItem = order.items.some(item => 
           item.detailName === '無型號品項' || 
@@ -1115,71 +1138,53 @@
           item.detailName.includes('未對應細目')
         );
 
+        const itemsHtml = order.items.map(item => `
+          <li class="flex items-center justify-between text-xs py-1 border-b ${hasNoModelItem ? 'border-rose-200/60' : 'border-slate-100'} last:border-0 print:border-black/20">
+            <div class="flex items-center gap-2">
+              <span class="font-bold ${hasNoModelItem ? 'text-rose-900' : 'text-slate-900'} print:text-black">${escapeHtml(item.detailName)}</span>
+              <span class="text-[10px] ${hasNoModelItem ? 'text-rose-600' : 'text-slate-400'} print:text-black font-mono">(${escapeHtml(item.model)})</span>
+            </div>
+            <span class="font-bold ${hasNoModelItem ? 'text-rose-900' : 'text-slate-900'} print:text-black font-mono">x ${item.qty}</span>
+          </li>
+        `).join('');
+
         if (hasNoModelItem) {
-          card.className = 'jp-card print-card p-4 bg-rose-600 text-white border-rose-700 relative overflow-hidden shadow-lg';
-
-          const itemsHtml = order.items.map(item => `
-            <li class="flex items-center justify-between text-xs py-1 border-b border-rose-400/40 last:border-0 print:border-black/20">
-              <div class="flex items-center gap-2">
-                <span class="font-bold text-white print:text-black">${escapeHtml(item.detailName)}</span>
-                <span class="text-[10px] text-rose-200 print:text-black font-mono">(${escapeHtml(item.model)})</span>
-              </div>
-              <span class="font-bold text-white print:text-black font-mono">x ${item.qty}</span>
-            </li>
-          `).join('');
-
+          card.className = 'jp-card print-card p-4 bg-rose-50/90 text-slate-900 border-rose-200 relative overflow-hidden shadow-sm';
           card.innerHTML = `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-rose-400/50 pb-3 mb-3 print:border-black">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-rose-200 pb-3 mb-3 print:border-black">
               <div class="flex items-center gap-3">
-                <span class="px-2 py-0.5 bg-rose-900/80 border border-rose-300/50 text-white font-mono text-xs font-bold rounded print:bg-white print:border-black print:text-black flex items-center gap-1">
-                  <svg width="14" height="14" class="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                  </svg>
+                <span class="px-2 py-0.5 bg-rose-600 text-white font-mono text-xs font-bold rounded print:bg-white print:border-black print:text-black flex items-center gap-1">
                   #${cardNum++} [含未對應/無型號品項]
                 </span>
                 <div>
-                  <span class="text-[10px] text-rose-100 print:text-black uppercase tracking-wider block">訂單編號 (A列)</span>
-                  <span class="text-sm font-bold text-white print:text-black font-mono">${escapeHtml(order.orderId)}</span>
+                  <span class="text-[10px] text-rose-700 print:text-black uppercase tracking-wider block">訂單編號</span>
+                  <span class="text-sm font-bold text-rose-950 print:text-black font-mono">${escapeHtml(order.orderId)}</span>
                 </div>
               </div>
-
               <div class="flex items-center gap-6 text-xs">
                 <div>
-                  <span class="text-[10px] text-rose-100 print:text-black block">收件姓名 (AI列)</span>
-                  <span class="font-semibold text-white print:text-black">${escapeHtml(order.name)}</span>
+                  <span class="text-[10px] text-rose-700 print:text-black block">收件姓名</span>
+                  <span class="font-semibold text-slate-900 print:text-black">${escapeHtml(order.name)}</span>
                 </div>
                 <div>
-                  <span class="text-[10px] text-rose-100 print:text-black block">收件電話 (AR列)</span>
-                  <span class="font-mono text-white print:text-black">${escapeHtml(order.phone)}</span>
+                  <span class="text-[10px] text-rose-700 print:text-black block">收件電話</span>
+                  <span class="font-mono text-slate-900 print:text-black">${escapeHtml(order.phone)}</span>
                 </div>
               </div>
             </div>
-
-            <div class="mb-3 bg-rose-700/80 p-2.5 rounded border border-rose-500/60 print:bg-white print:border-black">
-              <span class="text-[10px] text-rose-200 print:text-black block mb-0.5">收件地址 (AO + AN + AJ)</span>
-              <p class="text-xs font-medium text-white print:text-black select-all">${escapeHtml(order.address)}</p>
+            <div class="mb-3 bg-white p-2.5 rounded border border-rose-200 print:bg-white print:border-black">
+              <span class="text-[10px] text-rose-700 print:text-black block mb-0.5">收件地址</span>
+              <p class="text-xs font-medium text-slate-900 print:text-black select-all">${escapeHtml(order.address)}</p>
             </div>
-
             <div>
-              <span class="text-[10px] text-rose-100 print:text-black block mb-1">內含商品與細目對應 (${order.items.length} 列)</span>
-              <ul class="bg-rose-700/50 rounded p-2 border border-rose-500/50 space-y-0.5 print:border-black">
+              <span class="text-[10px] text-rose-700 print:text-black block mb-1">內含商品與細目對應 (${order.items.length} 列)</span>
+              <ul class="bg-white/80 rounded p-2 border border-rose-200/80 space-y-0.5 print:border-black">
                 ${itemsHtml}
               </ul>
             </div>
           `;
         } else {
           card.className = 'jp-card print-card p-4 bg-white relative overflow-hidden';
-
-          const itemsHtml = order.items.map(item => `
-            <li class="flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-0 print:border-black/20">
-              <div class="flex items-center gap-2">
-                <span class="font-bold text-slate-900 print:text-black">${escapeHtml(item.detailName)}</span>
-                <span class="text-[10px] text-slate-400 print:text-black font-mono">(${escapeHtml(item.model)})</span>
-              </div>
-              <span class="font-bold text-slate-900 print:text-black font-mono">x ${item.qty}</span>
-            </li>
-          `).join('');
-
           card.innerHTML = `
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3 print:border-black">
               <div class="flex items-center gap-3">
@@ -1187,31 +1192,28 @@
                   #${cardNum++}
                 </span>
                 <div>
-                  <span class="text-[10px] text-slate-400 print:text-black uppercase tracking-wider block">訂單編號 (A列)</span>
+                  <span class="text-[10px] text-slate-400 print:text-black uppercase tracking-wider block">訂單編號</span>
                   <span class="text-sm font-bold text-slate-900 print:text-black font-mono">${escapeHtml(order.orderId)}</span>
                 </div>
               </div>
-
               <div class="flex items-center gap-6 text-xs">
                 <div>
-                  <span class="text-[10px] text-slate-400 print:text-black block">收件姓名 (AI列)</span>
+                  <span class="text-[10px] text-slate-400 print:text-black block">收件姓名</span>
                   <span class="font-semibold text-slate-900 print:text-black">${escapeHtml(order.name)}</span>
                 </div>
                 <div>
-                  <span class="text-[10px] text-slate-400 print:text-black block">收件電話 (AR列)</span>
+                  <span class="text-[10px] text-slate-400 print:text-black block">收件電話</span>
                   <span class="font-mono text-slate-900 print:text-black">${escapeHtml(order.phone)}</span>
                 </div>
               </div>
             </div>
-
             <div class="mb-3 bg-slate-50 p-2.5 rounded border border-slate-200 print:bg-white print:border-black">
-              <span class="text-[10px] text-slate-400 print:text-black block mb-0.5">收件地址 (AO + AN + AJ)</span>
+              <span class="text-[10px] text-slate-400 print:text-black block mb-0.5">收件地址</span>
               <p class="text-xs font-medium text-slate-900 print:text-black select-all">${escapeHtml(order.address)}</p>
             </div>
-
             <div>
               <span class="text-[10px] text-slate-400 print:text-black block mb-1">內含商品與細目對應 (${order.items.length} 列)</span>
-              <ul class="bg-white rounded p-2 border border-slate-100 space-y-0.5 print:border-black">
+              <ul class="bg-slate-50/50 rounded p-2 border border-slate-100 space-y-0.5 print:border-black">
                 ${itemsHtml}
               </ul>
             </div>
@@ -1222,9 +1224,40 @@
       });
     }
 
-    /* ==========================================================================
-       A5 PRINT VIEW HANDLER
-       ========================================================================== */
+    function renderScreenExtraSummary(liningCounts, boxCounts) {
+      const container = document.getElementById('logic-a-extra-summary');
+      if (!container) return;
+
+      const boxItems = Array.from(boxCounts.entries()).map(([box, qty]) => `
+        <div class="flex items-center justify-between text-xs py-1.5 border-b border-slate-100 last:border-0">
+          <span class="font-medium text-slate-800">包裝盒 「<strong class="text-indigo-700">${escapeHtml(box)}</strong>」</span>
+          <span class="font-bold text-slate-900 font-mono bg-slate-100 px-2.5 py-0.5 rounded">${qty}</span>
+        </div>
+      `).join('') || '<p class="text-xs text-slate-400 py-1">無統計資料</p>';
+
+      const liningItems = Array.from(liningCounts.entries()).map(([lining, qty]) => `
+        <div class="flex items-center justify-between text-xs py-1.5 border-b border-slate-100 last:border-0">
+          <span class="font-medium text-slate-800">內襯 「<strong class="text-emerald-700">${escapeHtml(lining)}</strong>」</span>
+          <span class="font-bold text-slate-900 font-mono bg-slate-100 px-2.5 py-0.5 rounded">${qty}</span>
+        </div>
+      `).join('') || '<p class="text-xs text-slate-400 py-1">無統計資料</p>';
+
+      container.innerHTML = `
+        <div class="jp-card p-4 bg-white">
+          <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            📦 包裝盒總量統計 (K列)
+          </h4>
+          <div class="space-y-0.5">${boxItems}</div>
+        </div>
+        <div class="jp-card p-4 bg-white">
+          <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            🧩 內襯總量統計 (J列)
+          </h4>
+          <div class="space-y-0.5">${liningItems}</div>
+        </div>
+      `;
+    }
+
     function printA5Summary() {
       if (!rawExcelRows || rawExcelRows.length === 0 || lastProcessedDetailSummaryMap.size === 0) {
         showToast('請先上傳並解析 Excel 訂單檔案！', 'error');
@@ -1270,7 +1303,6 @@
         return detailA.localeCompare(detailB, 'zh-TW');
       });
 
-      // Filter exclusions
       if (excludeTk) {
         sortedSummaries = sortedSummaries.filter(([detailName, data]) => {
           const models = Array.from(data.originalModels || []);
@@ -1288,8 +1320,19 @@
       }
 
       let totalItemsQty = 0;
-      sortedSummaries.forEach(([, data]) => {
+      const liningCounts = new Map();
+      const boxCounts = new Map();
+
+      sortedSummaries.forEach(([detailName, data]) => {
         totalItemsQty += data.totalQty;
+
+        const extraInfo = detailExtraInfoMap.get(detailName) || { lining: '', box: '' };
+        if (extraInfo.lining && extraInfo.lining !== '-') {
+          liningCounts.set(extraInfo.lining, (liningCounts.get(extraInfo.lining) || 0) + data.totalQty);
+        }
+        if (extraInfo.box && extraInfo.box !== '-') {
+          boxCounts.set(extraInfo.box, (boxCounts.get(extraInfo.box) || 0) + data.totalQty);
+        }
       });
 
       let tags = [];
@@ -1297,7 +1340,7 @@
       if (excludeNoModel) tags.push('已排除無型號品項');
       const tagText = tags.length > 0 ? `<span style="font-size: 8.5pt; font-weight: normal; color: #555; margin-left: 6px;">[${tags.join(' / ')}]</span>` : '';
 
-      const itemsPerPage = 38; // 19 items on left + 19 items on right
+      const itemsPerPage = 38;
       const totalPages = Math.max(1, Math.ceil(sortedSummaries.length / itemsPerPage));
       let pagesHtml = '';
 
@@ -1314,11 +1357,9 @@
 
         const pageLabel = totalPages > 1 ? ` (${pageIdx + 1}/${totalPages})` : '';
 
-        // Left Column Box
         const leftBoxHtml = `
-          <div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box; display: flex; flex-direction: column;">
-            <div style="border: 2px solid #000; padding: 10px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column;">
-              <!-- Header -->
+          <div class="a5-box-half">
+            <div class="a5-box-inner">
               <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 6px;">
                 <div>
                   <h2 style="font-size: 15pt; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
@@ -1334,14 +1375,13 @@
                 </div>
               </div>
 
-              <!-- Table -->
               <div style="flex-grow: 1; overflow: hidden;">
-                <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                <table class="a5-table">
                   <thead>
-                    <tr style="background-color: #e2e8f0; border-bottom: 1px solid #000;">
-                      <th style="padding: 4px 6px; width: 28px; text-align: center; border-right: 1px solid #000; font-size: 10pt;">#</th>
-                      <th style="padding: 4px 6px; text-align: left; border-right: 1px solid #000; font-size: 10pt;">對應細目名稱 (Google Sheet G列)</th>
-                      <th style="padding: 4px 6px; width: 60px; text-align: center; font-size: 10pt;">總數量</th>
+                    <tr>
+                      <th style="width: 28px; text-align: center; border-right: 1px solid #000;">#</th>
+                      <th style="text-align: left; border-right: 1px solid #000;">對應細目名稱 (Google Sheet G列)</th>
+                      <th style="width: 60px; text-align: center;">總數量</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1353,13 +1393,11 @@
           </div>
         `;
 
-        // Right Column Box
         let rightBoxHtml = '';
         if (rightSummaries.length > 0) {
           rightBoxHtml = `
-            <div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box; display: flex; flex-direction: column;">
-              <div style="border: 2px solid #000; padding: 10px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column;">
-                <!-- Header -->
+            <div class="a5-box-half">
+              <div class="a5-box-inner">
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 6px;">
                   <div>
                     <h2 style="font-size: 15pt; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
@@ -1375,14 +1413,13 @@
                   </div>
                 </div>
 
-                <!-- Table -->
                 <div style="flex-grow: 1; overflow: hidden;">
-                  <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                  <table class="a5-table">
                     <thead>
-                      <tr style="background-color: #e2e8f0; border-bottom: 1px solid #000;">
-                        <th style="padding: 4px 6px; width: 28px; text-align: center; border-right: 1px solid #000; font-size: 10pt;">#</th>
-                        <th style="padding: 4px 6px; text-align: left; border-right: 1px solid #000; font-size: 10pt;">對應細目名稱 (Google Sheet G列)</th>
-                        <th style="padding: 4px 6px; width: 60px; text-align: center; font-size: 10pt;">總數量</th>
+                      <tr>
+                        <th style="width: 28px; text-align: center; border-right: 1px solid #000;">#</th>
+                        <th style="text-align: left; border-right: 1px solid #000;">對應細目名稱 (Google Sheet G列)</th>
+                        <th style="width: 60px; text-align: center;">總數量</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1394,11 +1431,11 @@
             </div>
           `;
         } else {
-          rightBoxHtml = `<div style="width: 148.5mm; height: 210mm; padding: 8mm 10mm; box-sizing: border-box;"></div>`;
+          rightBoxHtml = buildA5StatsBoxHtml(liningCounts, boxCounts, timeStr);
         }
 
         pagesHtml += `
-          <div style="display: flex; width: 297mm; height: 210mm; position: relative; box-sizing: border-box; background: #fff; font-family: 'Noto Sans TC', sans-serif; ${pageIdx < totalPages - 1 ? 'page-break-after: always; break-after: page;' : ''}">
+          <div class="a5-page-wrapper" style="${pageIdx < totalPages - 1 ? 'page-break-after: always; break-after: page;' : ''}">
             ${leftBoxHtml}
             <div style="position: absolute; left: 148.5mm; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #666; pointer-events: none; z-index: 20;"></div>
             ${rightBoxHtml}
@@ -1406,7 +1443,83 @@
         `;
       }
 
+      const lastPageSummariesCount = sortedSummaries.length % itemsPerPage;
+      if (sortedSummaries.length > 0 && (lastPageSummariesCount > 19 || lastPageSummariesCount === 0)) {
+        pagesHtml += `
+          <div class="a5-page-wrapper" style="page-break-before: always; break-before: page;">
+            ${buildA5StatsBoxHtml(liningCounts, boxCounts, timeStr)}
+            <div style="position: absolute; left: 148.5mm; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #666; pointer-events: none; z-index: 20;"></div>
+            <div class="a5-box-half"></div>
+          </div>
+        `;
+      }
+
       container.innerHTML = pagesHtml;
+    }
+
+    function buildA5StatsBoxHtml(liningCounts, boxCounts, timeStr) {
+      const boxRowsHtml = Array.from(boxCounts.entries()).map(([box, qty]) => `
+        <tr>
+          <td style="border-right: 1px solid #000; font-size: 11pt; padding: 4px 6px;">包裝盒 <strong>「${escapeHtml(box)}」</strong></td>
+          <td style="text-align: center; font-weight: bold; font-size: 13pt; font-family: monospace;">${qty}</td>
+        </tr>
+      `).join('') || `<tr><td colspan="2" style="text-align: center; color: #666; font-size: 10pt; padding: 6px;">無包裝盒統計資料</td></tr>`;
+
+      const liningRowsHtml = Array.from(liningCounts.entries()).map(([lining, qty]) => `
+        <tr>
+          <td style="border-right: 1px solid #000; font-size: 11pt; padding: 4px 6px;">內襯 <strong>「${escapeHtml(lining)}」</strong></td>
+          <td style="text-align: center; font-weight: bold; font-size: 13pt; font-family: monospace;">${qty}</td>
+        </tr>
+      `).join('') || `<tr><td colspan="2" style="text-align: center; color: #666; font-size: 10pt; padding: 6px;">無內襯統計資料</td></tr>`;
+
+      return `
+        <div class="a5-box-half">
+          <div class="a5-box-inner" style="justify-content: flex-start;">
+            <div style="border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px;">
+              <h2 style="font-size: 15pt; font-weight: bold; margin: 0; padding: 0; letter-spacing: 0.5px;">
+                內襯 & 包裝盒用量統計
+              </h2>
+              <div style="font-size: 9pt; color: #333; margin-top: 2px;">
+                <span>列印時間：${timeStr}</span>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 11pt; font-weight: bold; background-color: #e2e8f0; padding: 4px 6px; border: 1px solid #000; border-bottom: none;">
+                📦 包裝盒用量統計 (K列)
+              </div>
+              <table class="a5-table">
+                <thead>
+                  <tr>
+                    <th style="text-align: left; border-right: 1px solid #000;">包裝盒款式</th>
+                    <th style="width: 100px; text-align: center;">總需求量</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${boxRowsHtml}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <div style="font-size: 11pt; font-weight: bold; background-color: #e2e8f0; padding: 4px 6px; border: 1px solid #000; border-bottom: none;">
+                🧩 內襯用量統計 (J列)
+              </div>
+              <table class="a5-table">
+                <thead>
+                  <tr>
+                    <th style="text-align: left; border-right: 1px solid #000;">內襯款式</th>
+                    <th style="width: 100px; text-align: center;">總需求量</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${liningRowsHtml}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     function buildA5TableRows(summaries, startIdx) {
@@ -1424,10 +1537,10 @@
         const fontStyle = isUnmapped ? 'color: #dc2626; font-weight: bold;' : 'font-weight: bold;';
 
         html += `
-          <tr style="border-bottom: 1px solid #000;">
-            <td style="padding: 2px 4px; text-align: center; border-right: 1px solid #000; font-family: monospace; font-size: 10.5pt;">${idx}</td>
-            <td style="padding: 2px 4px; ${fontStyle} border-right: 1px solid #000; font-size: 12pt; line-height: 1.25;">${detailDisplay}</td>
-            <td style="padding: 2px 4px; text-align: center; font-weight: bold; font-size: 12.5pt; font-family: monospace;">${data.totalQty}</td>
+          <tr>
+            <td style="text-align: center; border-right: 1px solid #000; font-family: monospace; font-size: 10.5pt;">${idx}</td>
+            <td style="${fontStyle} border-right: 1px solid #000; font-size: 12pt; line-height: 1.25;">${detailDisplay}</td>
+            <td style="text-align: center; font-weight: bold; font-size: 12.5pt; font-family: monospace;">${data.totalQty}</td>
           </tr>
         `;
       });
@@ -1444,9 +1557,6 @@
         .replace(/'/g, '&#039;');
     }
 
-    /* ==========================================================================
-       HSINCHU LOGISTICS EXCEL EXPORT
-       ========================================================================== */
     function exportHsinchuLogisticsExcel() {
       if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) {
         showToast('請先上傳並解析 Excel 訂單檔案！', 'error');
@@ -1518,10 +1628,7 @@
       showToast(`已成功匯出新竹物流 Excel 檔 (${seq - 1} 筆資料)`, 'success');
     }
 
-    /* ==========================================================================
-       GEMINI AI ADDRESS VALIDATION FUNCTIONS
-       ========================================================================== */
-    function exportAddressCheckAndOpenGemini() {
+    async function exportAddressCheckAndOpenGemini() {
       if (!lastProcessedOrdersMap || lastProcessedOrdersMap.size === 0) {
         showToast('請先上傳並解析 Excel 訂單檔案！', 'error');
         return;
@@ -1551,15 +1658,35 @@
 2. 【建議修正對照】：針對有問題的項目，提供標準正確格式的地址。
 3. 如果所有地址皆完整無誤，請明確回覆「所有訂單地址皆格式完整正確」。`;
 
-      try {
-        const dummyInput = document.createElement('textarea');
-        dummyInput.value = promptTemplate;
-        document.body.appendChild(dummyInput);
-        dummyInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(dummyInput);
+      let copiedSuccess = false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(promptTemplate);
+          copiedSuccess = true;
+        } catch (err) {
+          console.warn('Modern Clipboard API failed, attempting fallback...', err);
+        }
+      }
+
+      if (!copiedSuccess) {
+        try {
+          const dummyInput = document.createElement('textarea');
+          dummyInput.value = promptTemplate;
+          dummyInput.style.position = 'fixed';
+          dummyInput.style.opacity = '0';
+          document.body.appendChild(dummyInput);
+          dummyInput.select();
+          document.execCommand('copy');
+          document.body.removeChild(dummyInput);
+          copiedSuccess = true;
+        } catch (e) {
+          copiedSuccess = false;
+        }
+      }
+
+      if (copiedSuccess) {
         showToast('已複製 AI 校對指令至剪貼簿！已下載 Excel 檢核檔', 'success');
-      } catch (e) {
+      } else {
         showToast('已下載 Excel 檢核檔，請直接前往 Gemini 上傳分析', 'info');
       }
 
