@@ -855,6 +855,11 @@
         orderId: 0,
         model: 20,
         qty: 16,
+        lineItemName: 17,
+        lineItemPrice: 18,
+        // Only activate order-adjustment detection when the uploaded file explicitly
+        // contains an Outstanding Balance / 未收餘額 column.
+        outstandingBalance: -1,
         name: 34,
         detailAddr: 35,
         district: 39,
@@ -891,6 +896,18 @@
           colIdx.model = idx;
         }
 
+        if (valUpper.includes('LINEITEM NAME') || val.includes('品項名稱') || val.includes('商品名稱')) {
+          colIdx.lineItemName = idx;
+        }
+
+        if (valUpper.includes('LINEITEM PRICE') || val.includes('品項單價') || val.includes('商品單價')) {
+          colIdx.lineItemPrice = idx;
+        }
+
+        if (valUpper.includes('OUTSTANDING BALANCE') || val.includes('未收餘額') || val.includes('未付餘額')) {
+          colIdx.outstandingBalance = idx;
+        }
+
         if (val.includes('收件人') || val.includes('收件姓名') || val.includes('買家姓名') || val === '收件人姓名') {
           colIdx.name = idx;
         }
@@ -918,13 +935,10 @@
     function processExcelRows(rows) {
       if (!rows || rows.length < 2) return;
 
-      const detailSummaryMap = new Map();
       const ordersMap = new Map();
 
       const headerRow = rows[0] || [];
       const colIdx = findColumnIndices(headerRow);
-
-      let totalItemRowsCount = 0;
 
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
@@ -933,10 +947,11 @@
         const orderId = cleanStr(row[colIdx.orderId]);
         if (!orderId || orderId.toLowerCase() === 'name' || orderId.includes('訂單編號')) continue;
 
-        totalItemRowsCount++;
-
         const rawModel = cleanStr(row[colIdx.model]);
         const normModel = normalizeKey(rawModel);
+        const productName = cleanStr(row[colIdx.lineItemName]);
+        const unitPrice = parseMoney(row[colIdx.lineItemPrice]);
+        const outstandingBalance = parseMoney(row[colIdx.outstandingBalance]);
 
         const recipientName = cleanStr(row[colIdx.name]);
         const zip = cleanStr(row[colIdx.zip]);
@@ -970,21 +985,6 @@
           isMapped = false;
         }
 
-        // Aggregate Logic A
-        if (!detailSummaryMap.has(detailName)) {
-          detailSummaryMap.set(detailName, {
-            totalQty: 0,
-            originalModels: new Set(),
-            orderIds: new Set(),
-            isMapped: isMapped
-          });
-        }
-        const summaryEntry = detailSummaryMap.get(detailName);
-        summaryEntry.totalQty += qty;
-        if (rawModel) summaryEntry.originalModels.add(rawModel);
-        if (orderId) summaryEntry.orderIds.add(orderId);
-
-        // Aggregate Logic B
         if (!ordersMap.has(orderId)) {
           const fullAddress = assembleAddress(zip, district, addressDetail);
           ordersMap.set(orderId, {
@@ -992,21 +992,102 @@
             name: recipientName || '-',
             phone: phone || '-',
             address: fullAddress || '-',
-            items: []
+            items: [],
+            outstandingBalance: 0,
+            adjustment: null
           });
         }
 
         const currentOrder = ordersMap.get(orderId);
+        if (outstandingBalance > 0) {
+          currentOrder.outstandingBalance = outstandingBalance;
+        }
         currentOrder.items.push({
           model: rawModel || '無型號',
           detailName: detailName,
-          qty: qty
+          productName: productName || detailName,
+          qty: qty,
+          unitPrice: unitPrice,
+          lineTotal: unitPrice * qty
         });
       }
+
+      applyOutstandingBalanceAdjustments(ordersMap);
+      const detailSummaryMap = buildDetailSummary(ordersMap);
+      const totalItemRowsCount = Array.from(ordersMap.values())
+        .reduce((count, order) => count + order.items.length, 0);
 
       lastProcessedDetailSummaryMap = detailSummaryMap;
       lastProcessedOrdersMap = ordersMap;
       renderReport(ordersMap, detailSummaryMap, totalItemRowsCount);
+    }
+
+    function parseMoney(value) {
+      if (value === null || value === undefined || value === '') return 0;
+      if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+      const normalized = String(value).replace(/[^0-9.-]/g, '');
+      const amount = Number(normalized);
+      return Number.isFinite(amount) ? amount : 0;
+    }
+
+    function amountsMatch(firstAmount, secondAmount) {
+      return Math.abs(firstAmount - secondAmount) < 0.005;
+    }
+
+    function applyOutstandingBalanceAdjustments(ordersMap) {
+      ordersMap.forEach(order => {
+        if (!(order.outstandingBalance > 0)) return;
+
+        // Only remove an item when one and only one line-item total exactly matches
+        // the outstanding balance. Ambiguous orders remain intact for manual review.
+        const matchingItems = order.items.filter(item =>
+          item.lineTotal > 0 && amountsMatch(item.lineTotal, order.outstandingBalance)
+        );
+
+        if (matchingItems.length === 1) {
+          const removedItem = matchingItems[0];
+          order.items = order.items.filter(item => item !== removedItem);
+          order.adjustment = {
+            status: 'applied',
+            balance: order.outstandingBalance,
+            removedItems: [removedItem]
+          };
+        } else {
+          order.adjustment = {
+            status: 'needs-review',
+            balance: order.outstandingBalance,
+            matchCount: matchingItems.length
+          };
+        }
+      });
+    }
+
+    function buildDetailSummary(ordersMap) {
+      const detailSummaryMap = new Map();
+
+      ordersMap.forEach(order => {
+        order.items.forEach(item => {
+          if (!detailSummaryMap.has(item.detailName)) {
+            detailSummaryMap.set(item.detailName, {
+              totalQty: 0,
+              originalModels: new Set(),
+              orderIds: new Set(),
+              isMapped: !item.detailName.includes('未對應細目') && item.detailName !== '無型號品項'
+            });
+          }
+
+          const summaryEntry = detailSummaryMap.get(item.detailName);
+          summaryEntry.totalQty += item.qty;
+          if (item.model && item.model !== '無型號') summaryEntry.originalModels.add(item.model);
+          summaryEntry.orderIds.add(order.orderId);
+        });
+      });
+
+      return detailSummaryMap;
+    }
+
+    function formatCurrency(amount) {
+      return `NT$${Math.round(amount).toLocaleString('zh-TW')}`;
     }
 
     function cleanStr(val) {
@@ -1127,6 +1208,23 @@
           item.detailName.includes('無型號品項') || 
           item.detailName.includes('未對應細目')
         );
+        const hasOrderAdjustment = Boolean(order.adjustment);
+        const removedItemsText = order.adjustment?.removedItems
+          ?.map(item => `${escapeHtml(item.productName)}（${escapeHtml(item.model)}）x ${item.qty}`)
+          .join('、');
+        const adjustmentNoticeHtml = !hasOrderAdjustment ? '' : order.adjustment.status === 'applied'
+          ? `
+            <div class="mb-3 bg-amber-50 border border-amber-300 rounded p-2.5 print:bg-white print:border-black">
+              <span class="text-[10px] text-amber-800 print:text-black font-bold block mb-0.5">偵測到訂單異動</span>
+              <p class="text-xs text-amber-950 print:text-black leading-relaxed">未收餘額為 <strong class="font-mono">${formatCurrency(order.adjustment.balance)}</strong>，已從本次彙整排除相符品項：<strong>${removedItemsText}</strong>。</p>
+            </div>
+          `
+          : `
+            <div class="mb-3 bg-amber-50 border border-amber-300 rounded p-2.5 print:bg-white print:border-black">
+              <span class="text-[10px] text-amber-800 print:text-black font-bold block mb-0.5">偵測到訂單異動，需人工確認</span>
+              <p class="text-xs text-amber-950 print:text-black leading-relaxed">未收餘額為 <strong class="font-mono">${formatCurrency(order.adjustment.balance)}</strong>，但找不到唯一相符的品項，因此本次彙整不會自動刪除任何品項。</p>
+            </div>
+          `;
 
         const itemsHtml = order.items.map(item => `
           <li class="flex items-center justify-between text-xs py-1 border-b ${hasNoModelItem ? 'border-rose-200/60' : 'border-slate-100'} last:border-0 print:border-black/20">
@@ -1138,13 +1236,13 @@
           </li>
         `).join('');
 
-        if (hasNoModelItem) {
+        if (hasNoModelItem || hasOrderAdjustment) {
           card.className = 'jp-card print-card p-4 bg-rose-50/90 text-slate-900 border-rose-200 relative overflow-hidden shadow-sm';
           card.innerHTML = `
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-rose-200 pb-3 mb-3 print:border-black">
               <div class="flex items-center gap-3">
                 <span class="px-2 py-0.5 bg-rose-600 text-white font-mono text-xs font-bold rounded print:bg-white print:border-black print:text-black flex items-center gap-1">
-                  #${cardNum++} [含未對應/無型號品項]
+                  #${cardNum++} ${hasNoModelItem ? '[含未對應/無型號品項]' : '[偵測到訂單異動]'}
                 </span>
                 <div>
                   <span class="text-[10px] text-rose-700 print:text-black uppercase tracking-wider block">訂單編號</span>
@@ -1162,6 +1260,7 @@
                 </div>
               </div>
             </div>
+            ${adjustmentNoticeHtml}
             <div class="mb-3 bg-white p-2.5 rounded border border-rose-200 print:bg-white print:border-black">
               <span class="text-[10px] text-rose-700 print:text-black block mb-0.5">收件地址</span>
               <p class="text-xs font-medium text-slate-900 print:text-black select-all">${escapeHtml(order.address)}</p>
