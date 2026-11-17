@@ -645,7 +645,9 @@
           if (!response.ok) throw new Error('API 傳回異常狀態');
           return response.json();
         })
-        .then(rows => {
+        .then(payload => {
+          const rows = Array.isArray(payload) ? payload : payload?.priceRows;
+
           if (rows && rows.length > 0) {
             processMappingRows(rows);
             isMappingLoaded = true;
